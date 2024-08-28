@@ -2,9 +2,9 @@ package data
 
 type BETorrent struct {
 	InfoHash     [20]byte
-	Announce     string   `bencode:"announce"`
-	AnnounceList []string `bencode:"annouce-list"`
-	Info         BEInfo   `bencode:"info"`
+	Announce     string     `bencode:"announce"`
+	AnnounceList [][]string `bencode:"announce-list"`
+	Info         BEInfo     `bencode:"info"`
 }
 
 type BEInfo struct {

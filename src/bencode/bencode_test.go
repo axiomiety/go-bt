@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -235,6 +236,10 @@ func TestBencodeStructTags(t *testing.T) {
 	}
 	if btorrent.Info.Length != 1975971840 {
 		t.Errorf("expected %d, found %d", 1975971840, btorrent.Info.Length)
+	}
+	announceList := [][]string{{"https://torrent.ubuntu.com/announce"}, {"https://ipv6.torrent.ubuntu.com/announce"}}
+	if !reflect.DeepEqual(btorrent.AnnounceList, announceList) {
+		t.Errorf("expected %v, found %v", announceList, btorrent.AnnounceList)
 	}
 
 	// do the same for a tracker response - plenty of nested structs/slices!

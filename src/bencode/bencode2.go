@@ -128,28 +128,35 @@ func fillStruct(o any, d map[string]any) {
 	} else {
 		structure = reflect.TypeOf(o)
 	}
+
+	var fill func(containerType reflect.Type, val any, field reflect.Value)
+
+	// using this for recursive calls for e.g. slices of slices
+	fill = func(containerType reflect.Type, val any, field reflect.Value) {
+		switch containerType.Kind() {
+		case reflect.Struct:
+			oo := reflect.New(containerType)
+			fillStruct(oo.Interface(), val.(map[string]any))
+			field.Set(oo.Elem())
+		case reflect.Slice:
+			s := reflect.ValueOf(val)
+			// reflect.SliceOf(string) say, returns a []string type
+			valueSlice := reflect.MakeSlice(reflect.SliceOf(containerType.Elem()), s.Len(), s.Len())
+			for i := 0; i < s.Len(); i++ {
+				fill(containerType.Elem(), s.Index(i).Interface(), valueSlice.Index(i))
+			}
+			field.Set(valueSlice.Convert(containerType))
+		default:
+			bindat := reflect.ValueOf(val).Convert(containerType)
+			field.Set(bindat)
+		}
+	}
+
 	for i := 0; i < structure.NumField(); i++ {
 		f := structure.Field(i)
 		tag := f.Tag.Get("bencode")
-
 		if val, ok := d[tag]; ok {
-			if f.Type.Kind() == reflect.Slice {
-				s := reflect.ValueOf(val)
-				valueSlice := reflect.MakeSlice(reflect.SliceOf(f.Type.Elem()), s.Len(), s.Len())
-				reflect.ValueOf(o).Elem().Field(i).Set(valueSlice)
-				for i := 0; i < s.Len(); i++ {
-					item := reflect.New(f.Type.Elem())
-					fillStruct(item.Interface(), s.Index(i).Interface().(map[string]any))
-					valueSlice.Index(i).Set(item.Elem())
-				}
-			} else if f.Type.Kind() != reflect.Struct {
-				bindat := reflect.ValueOf(val).Convert(f.Type)
-				reflect.ValueOf(o).Elem().Field(i).Set(bindat)
-			} else {
-				oo := reflect.New(f.Type)
-				fillStruct(oo.Interface(), val.(map[string]any))
-				reflect.ValueOf(o).Elem().Field(i).Set(oo.Elem())
-			}
+			fill(f.Type, val, reflect.ValueOf(o).Elem().Field(i))
 		}
 	}
 }
