@@ -15,6 +15,10 @@ func main() {
 	bencodeCmd := flag.NewFlagSet("bencode", flag.ExitOnError)
 	bencodeDecode := bencodeCmd.String("decode", "-", "decode file/stdin")
 
+	createCmd := flag.NewFlagSet("create", flag.ExitOnError)
+	createAnnounce := createCmd.String("announce", "", "tracker URL")
+	createName := createCmd.String("name", "", "info.name")
+
 	switch os.Args[1] {
 	case "bencode":
 		bencodeCmd.Parse(os.Args[2:])
@@ -28,11 +32,13 @@ func main() {
 			common.Check(err)
 		}
 		obj := bencode.ParseBencoded2(bytes.NewReader(contents)).(map[string]any)
-		// obj := bencode.ParseFromReader[data.BETorrent](bytes.NewReader(contents))
 		b, err := json.MarshalIndent(obj, "", "  ")
 		common.Check(err)
 		fmt.Printf("%s", string(b))
+	case "create":
+		createCmd.Parse(os.Args[2:])
+		common.CreateTorrent(*createAnnounce, *createName, createCmd.Args()...)
 	default:
-		fmt.Println("woops1")
+		panic("Unknown option!")
 	}
 }

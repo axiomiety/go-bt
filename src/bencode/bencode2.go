@@ -122,6 +122,7 @@ func ParseBencoded2(r io.Reader) any {
 }
 
 func fillStruct(o any, d map[string]any) {
+	fmt.Println("here")
 	var structure reflect.Type
 	if reflect.TypeOf(o).Kind() != reflect.Struct {
 		structure = reflect.TypeOf(o).Elem()
