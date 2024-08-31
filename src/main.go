@@ -3,6 +3,7 @@ package main
 import (
 	"axiomiety/go-bt/bencode"
 	"axiomiety/go-bt/common"
+	"axiomiety/go-bt/torrent"
 	"bytes"
 	"encoding/json"
 	"flag"
@@ -16,8 +17,10 @@ func main() {
 	bencodeDecode := bencodeCmd.String("decode", "-", "decode file/stdin")
 
 	createCmd := flag.NewFlagSet("create", flag.ExitOnError)
+	createOutputFile := createCmd.String("out", "", "tracker URL")
 	createAnnounce := createCmd.String("announce", "", "tracker URL")
 	createName := createCmd.String("name", "", "info.name")
+	createPieceLength := createCmd.Int("pieceLength", 262144, "length of each piece")
 
 	switch os.Args[1] {
 	case "bencode":
@@ -37,7 +40,7 @@ func main() {
 		fmt.Printf("%s", string(b))
 	case "create":
 		createCmd.Parse(os.Args[2:])
-		common.CreateTorrent(*createAnnounce, *createName, createCmd.Args()...)
+		torrent.CreateTorrent(*createOutputFile, *createAnnounce, *createName, *createPieceLength, createCmd.Args()...)
 	default:
 		panic("Unknown option!")
 	}

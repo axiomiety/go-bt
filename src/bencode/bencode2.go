@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"reflect"
 	"slices"
 	"strconv"
@@ -122,7 +121,6 @@ func ParseBencoded2(r io.Reader) any {
 }
 
 func fillStruct(o any, d map[string]any) {
-	fmt.Println("here")
 	var structure reflect.Type
 	if reflect.TypeOf(o).Kind() != reflect.Struct {
 		structure = reflect.TypeOf(o).Elem()
@@ -175,7 +173,6 @@ func ParseFromReader[S data.BETorrent | data.BETrackerResponse](r io.Reader) *S 
 
 func Encode(buffer *bytes.Buffer, o any) {
 	value := reflect.ValueOf(o)
-	log.Printf("found %s for %s", value.Kind(), o)
 	switch value.Kind() {
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64:
 		buffer.WriteByte('i')
