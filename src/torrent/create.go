@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"io"
-	"log"
 	"os"
 )
 
@@ -53,8 +52,8 @@ func mkInfoDict(name string, filenames []string, pieceLength int) map[string]any
 
 func calculatePieces(pieceLength int, filenames []string) string {
 	/*
-		pieces are calculated based on the continuous stream of the
-		provided files
+		pieces are calculated based on the continuous byte stream
+		of the provided files
 	*/
 	var pieces bytes.Buffer
 	pieceBuffer := bytes.NewBuffer(make([]byte, 0, pieceLength))
@@ -66,13 +65,14 @@ func calculatePieces(pieceLength int, filenames []string) string {
 		for {
 			bytesToRead := pieceBuffer.Available()
 			readBuffer := make([]byte, bytesToRead)
-			log.Printf("avail, buf: %d %d\n", bytesToRead, len(readBuffer))
 			bytesRead, err := f.Read(readBuffer)
 			pieceBuffer.Write(readBuffer[:bytesRead])
-			log.Printf("read %d bytes\n", bytesRead)
+			// time to process the next file, if any
 			if err == io.EOF {
 				break
 			}
+			// we filled a full piece - let's hash it
+			// and append the digest
 			if pieceBuffer.Available() == 0 {
 				h.Write(pieceBuffer.Bytes())
 				pieces.Write(h.Sum(nil))
