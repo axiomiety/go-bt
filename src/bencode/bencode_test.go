@@ -250,6 +250,48 @@ func TestBencodeStructTags(t *testing.T) {
 		t.Errorf("expected 2 peers, got %d", len(trackerResponse.Peers))
 	}
 	if trackerResponse.Peers[0].IP != "2a02:1210:4831:9700:ba27:ebff:fe91:60cd" {
-		t.Errorf("? %v", trackerResponse.Peers[0].IP)
+		t.Errorf("mismatch in first peer IP: %v", trackerResponse.Peers[0].IP)
+	}
+
+	// a torrent with multiple files
+	file, _ = os.Open("testdata/files.torrent")
+	defer file.Close()
+	btorrent = bencode.ParseFromReader[data.BETorrent](file)
+	if btorrent.Info.Length != 0 {
+		t.Errorf("info.length should be nil (0), found %d", btorrent.Info.Length)
+	}
+	if len(btorrent.Info.Files) != 3 {
+		t.Errorf("expecting 3 files, found %d", len(btorrent.Info.Files))
+	}
+	if !reflect.DeepEqual(btorrent.Info.Files[2].Path, []string{"/tmp/files/file3"}) {
+		t.Errorf("expecting info.files[2].path to be file3, found %s instead", btorrent.Info.Files[2].Path)
+	}
+}
+
+func TestBencodeStruct(t *testing.T) {
+	beinfo := data.BEInfo{
+		Name:        "foo",
+		PieceLength: 65536,
+		Files: []data.BEFile{
+			{
+				Path:   []string{"path1"},
+				Length: 123,
+			},
+			{
+				Path:   []string{"path2"},
+				Length: 456,
+			},
+		},
+	}
+	val := bencode.ToBencodedDict(beinfo)
+	expected := map[string]any{
+		"name":         "foo",
+		"piece length": 65536,
+		"files": []map[string]any{
+			{"path": []string{"path1"}},
+		},
+	}
+	if !reflect.DeepEqual(val, expected) {
+		t.Errorf("exepcted %+v, got %+v", expected, val)
 	}
 }
