@@ -230,44 +230,6 @@ func Encode(buffer *bytes.Buffer, o any) {
 	}
 }
 
-func ToBencodedDict2(val any) map[string]any {
-	structure := reflect.TypeOf(val)
-	ret := map[string]any{}
-	for i := 0; i < structure.NumField(); i++ {
-		f := structure.Field(i)
-		tag := f.Tag.Get("bencode")
-		if tag != "" {
-			fmt.Printf("tag=%s, %s\n", tag, f.Type.Kind())
-			switch f.Type.Kind() {
-			case reflect.Struct:
-				fmt.Printf("reflect kind!\n")
-				fmt.Printf("%s\n", reflect.ValueOf(val).FieldByName(f.Name))
-				// ret[tag] = ToBencodedDict(reflect.ValueOf(val).FieldByName(f.Name))
-			case reflect.Slice:
-				s := reflect.ValueOf(val).FieldByName(f.Name)
-				// if we have a slice of struct, this will become a map[string]any
-				var valueSlice reflect.Value
-				switch f.Type.Elem().Kind() {
-				case reflect.Struct:
-					valueSlice = reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(ret)), s.Len(), s.Len())
-					for i := 0; i < s.Len(); i++ {
-						valueSlice.Index(i).Set(reflect.ValueOf(ToBencodedDict(s.Index(i))))
-					}
-				default:
-					valueSlice = reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(s)), s.Len(), s.Len())
-				}
-				fmt.Printf("slice-%v, %s\n", s, f.Type.Elem())
-				ret[tag] = valueSlice
-			default:
-				ret[tag] = val
-			}
-
-		}
-
-	}
-	return ret
-}
-
 func ToBencodedDict(val any) map[string]any {
 	structure := reflect.TypeOf(val)
 	ret := map[string]any{}
@@ -278,13 +240,11 @@ func ToBencodedDict(val any) map[string]any {
 		t := reflect.TypeOf(obj)
 		switch t.Kind() {
 		case reflect.Struct:
-			// fmt.Printf("struct\n")
 			return ToBencodedDict(obj)
 		case reflect.Slice:
 			v := reflect.ValueOf(obj)
 			switch t.Elem().Kind() {
 			case reflect.Struct:
-				// valueSlice := reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(map[string]any{})), v.Len(), v.Len())
 				valueSlice := make([]map[string]any, v.Len())
 				for i := 0; i < v.Len(); i++ {
 					o := ToBencodedDict(v.Index(i).Interface())

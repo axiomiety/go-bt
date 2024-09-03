@@ -284,11 +284,15 @@ func TestBencodeStruct(t *testing.T) {
 		},
 	}
 	val := bencode.ToBencodedDict(beinfo)
+	// due to how we encode, note how we need to specify unit64
 	expected := map[string]any{
 		"name":         "foo",
-		"piece length": 65536,
+		"piece length": uint64(65536),
+		"length":       uint64(0),
+		"pieces":       "",
 		"files": []map[string]any{
-			{"path": []string{"path1"}},
+			{"path": []string{"path1"}, "length": 123},
+			{"path": []string{"path2"}, "length": 456},
 		},
 	}
 	if !reflect.DeepEqual(val, expected) {
