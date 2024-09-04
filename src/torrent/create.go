@@ -90,6 +90,8 @@ func calculatePieces(pieceLength int, filenames []string) string {
 	return pieces.String()
 }
 
-func CalculateInfoHash(info *data.BEInfo) {
-	// infoMap := bencode.ToBencodedDict(info)
+func CalculateInfoDigest(info *data.BEInfo) [20]byte {
+	var buf bytes.Buffer
+	bencode.Encode(&buf, bencode.ToBencodedDict(*info))
+	return sha1.Sum(buf.Bytes())
 }
