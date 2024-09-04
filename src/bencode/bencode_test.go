@@ -269,6 +269,7 @@ func TestBencodeStructTags(t *testing.T) {
 }
 
 func TestBencodeStruct(t *testing.T) {
+	// info dict with multiple files
 	beinfo := data.BEInfo{
 		Name:        "foo",
 		PieceLength: 65536,
@@ -288,12 +289,32 @@ func TestBencodeStruct(t *testing.T) {
 	expected := map[string]any{
 		"name":         "foo",
 		"piece length": uint64(65536),
-		"length":       uint64(0),
-		"pieces":       "",
+		// "length":       uint64(0),
+		// "pieces":       "",
 		"files": []map[string]any{
 			{"path": []string{"path1"}, "length": 123},
 			{"path": []string{"path2"}, "length": 456},
 		},
+	}
+	if !reflect.DeepEqual(val, expected) {
+		t.Errorf("exepcted %+v, got %+v", expected, val)
+	}
+
+	// info dict with a single file
+	beinfo = data.BEInfo{
+		Name:        "foo",
+		PieceLength: 65536,
+		Pieces:      "deadbeef",
+		Length:      123456,
+	}
+	val = bencode.ToBencodedDict(beinfo)
+	// due to how we encode, note how we need to specify unit64
+	expected = map[string]any{
+		"name":         "foo",
+		"piece length": uint64(65536),
+		"length":       uint64(123456),
+		"pieces":       "deadbeef",
+		// "files":        make([]map[string]any, 0),
 	}
 	if !reflect.DeepEqual(val, expected) {
 		t.Errorf("exepcted %+v, got %+v", expected, val)

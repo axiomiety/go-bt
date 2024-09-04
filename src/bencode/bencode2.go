@@ -268,7 +268,8 @@ func ToBencodedDict(val any) map[string]any {
 	for i := 0; i < structure.NumField(); i++ {
 		f := structure.Field(i)
 		tag := f.Tag.Get("bencode")
-		if tag != "" {
+		// idk if this is the correct thing to do, but it does help flush out unset values
+		if tag != "" && !reflect.ValueOf(val).FieldByName(f.Name).IsZero() {
 			ret[tag] = fill(reflect.ValueOf(val).FieldByName(f.Name).Interface())
 		}
 
