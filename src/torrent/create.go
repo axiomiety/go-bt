@@ -3,7 +3,6 @@ package torrent
 import (
 	"axiomiety/go-bt/bencode"
 	"axiomiety/go-bt/common"
-	"axiomiety/go-bt/data"
 	"bytes"
 	"crypto/sha1"
 	"io"
@@ -88,10 +87,4 @@ func calculatePieces(pieceLength int, filenames []string) string {
 		pieces.Write(h.Sum(nil))
 	}
 	return pieces.String()
-}
-
-func CalculateInfoDigest(info *data.BEInfo) [20]byte {
-	var buf bytes.Buffer
-	bencode.Encode(&buf, bencode.ToBencodedDict(*info))
-	return sha1.Sum(buf.Bytes())
 }

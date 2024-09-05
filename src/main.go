@@ -4,6 +4,7 @@ import (
 	"axiomiety/go-bt/bencode"
 	"axiomiety/go-bt/common"
 	"axiomiety/go-bt/torrent"
+	"axiomiety/go-bt/tracker"
 	"bytes"
 	"encoding/json"
 	"flag"
@@ -21,6 +22,9 @@ func main() {
 	createAnnounce := createCmd.String("announce", "", "tracker URL")
 	createName := createCmd.String("name", "", "info.name")
 	createPieceLength := createCmd.Int("pieceLength", 262144, "length of each piece")
+
+	infoHashCmd := flag.NewFlagSet("infohash", flag.ExitOnError)
+	infoHashFile := infoHashCmd.String("file", "-", "file/stdin")
 
 	switch os.Args[1] {
 	case "bencode":
@@ -41,6 +45,20 @@ func main() {
 	case "create":
 		createCmd.Parse(os.Args[2:])
 		torrent.CreateTorrent(*createOutputFile, *createAnnounce, *createName, *createPieceLength, createCmd.Args()...)
+	case "infohash":
+		infoHashCmd.Parse(os.Args[2:])
+		var contents []byte
+		var err error
+		if *infoHashFile == "-" {
+			contents, err = io.ReadAll(os.Stdin)
+			common.Check(err)
+		} else {
+			contents, err = os.ReadFile(*infoHashFile)
+			common.Check(err)
+		}
+		obj := bencode.ParseBencoded2(bytes.NewReader(contents)).(map[string]any)
+		digest := torrent.CalculateInfoHashFromInfoDict(obj["info"].(map[string]any))
+		fmt.Printf("%s\n", tracker.EncodeInfoHash(digest))
 	default:
 		panic("Unknown option!")
 	}

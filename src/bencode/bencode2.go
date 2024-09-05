@@ -230,7 +230,7 @@ func Encode(buffer *bytes.Buffer, o any) {
 	}
 }
 
-func ToBencodedDict(val any) map[string]any {
+func ToDict(val any) map[string]any {
 	structure := reflect.TypeOf(val)
 	ret := map[string]any{}
 
@@ -240,14 +240,14 @@ func ToBencodedDict(val any) map[string]any {
 		t := reflect.TypeOf(obj)
 		switch t.Kind() {
 		case reflect.Struct:
-			return ToBencodedDict(obj)
+			return ToDict(obj)
 		case reflect.Slice:
 			v := reflect.ValueOf(obj)
 			switch t.Elem().Kind() {
 			case reflect.Struct:
 				valueSlice := make([]map[string]any, v.Len())
 				for i := 0; i < v.Len(); i++ {
-					o := ToBencodedDict(v.Index(i).Interface())
+					o := ToDict(v.Index(i).Interface())
 					valueSlice[i] = o
 				}
 				return valueSlice
