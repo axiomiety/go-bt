@@ -58,7 +58,7 @@ func main() {
 		}
 		obj := bencode.ParseBencoded2(bytes.NewReader(contents)).(map[string]any)
 		digest := torrent.CalculateInfoHashFromInfoDict(obj["info"].(map[string]any))
-		fmt.Printf("%s\n", tracker.EncodeInfoHash(digest))
+		fmt.Printf("hex: %x\nurl: %s\n", digest, tracker.EncodeInfoHash(digest))
 	default:
 		panic("Unknown option!")
 	}
