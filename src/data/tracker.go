@@ -12,3 +12,13 @@ type BETrackerResponse struct {
 	Interval   int64    `bencode:"interval"`   // in seconds
 	Peers      []BEPeer `bencode:"peers"`
 }
+
+type TrackerQuery struct {
+	InfoHash   string `url:"info_hash"`
+	PeerId     string `url:"peer_id"`
+	Port       uint16 `url:"port"`
+	Uploaded   uint   `url:"uploaded"`
+	Downloaded uint   `url:"downloaded"`
+	Left       uint   `url:"left"`
+	Event      string `url:"event"`
+}

@@ -1,8 +1,10 @@
 package tracker
 
 import (
+	"axiomiety/go-bt/data"
 	"encoding/hex"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -27,4 +29,24 @@ func encodeByte(val byte) string {
 	default:
 		return fmt.Sprintf("%%%s", strings.ToUpper(hex.EncodeToString([]byte{val})))
 	}
+}
+
+func ToQueryString(q *data.TrackerQuery) string {
+	structure := reflect.TypeOf(q).Elem()
+	pairs := []string{}
+	for i := 0; i < structure.NumField(); i++ {
+		f := structure.Field(i)
+		tag := f.Tag.Get("url")
+		if tag != "" {
+			val := reflect.ValueOf(q).Elem().FieldByName(f.Name).Interface()
+			switch f.Type.Kind() {
+			case reflect.String:
+				pairs = append(pairs, fmt.Sprintf("%s=%s", tag, val))
+			case reflect.Uint:
+				pairs = append(pairs, fmt.Sprintf("%s=%d", tag, val))
+			}
+		}
+
+	}
+	return strings.Join(pairs, "&")
 }
