@@ -243,7 +243,7 @@ func TestBencodeStructTags(t *testing.T) {
 	}
 
 	// do the same for a tracker response - plenty of nested structs/slices!
-	file2, _ := os.Open("testdata/tracker.response.beencoded")
+	file2, _ := os.Open("testdata/tracker.response.bencoded")
 	defer file2.Close()
 	trackerResponse := bencode.ParseFromReader[data.BETrackerResponse](file2)
 	if len(trackerResponse.Peers) != 33 {
