@@ -13,7 +13,7 @@ func TestQueryString(t *testing.T) {
 		Left:     3,
 	}
 
-	expected := "info_hash=deadbeef&peer_id=foo&uploaded=0&downloaded=0&left=3&event="
+	expected := "info_hash=deadbeef&peer_id=foo&uploaded=0&downloaded=0&left=3"
 	qstring := tracker.ToQueryString(&q)
 	if qstring != expected {
 		t.Errorf("expected %s but got %s", expected, qstring)

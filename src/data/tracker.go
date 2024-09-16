@@ -16,9 +16,10 @@ type BETrackerResponse struct {
 type TrackerQuery struct {
 	InfoHash   string `url:"info_hash"`
 	PeerId     string `url:"peer_id"`
-	Port       uint16 `url:"port"`
+	Port       uint   `url:"port"`
 	Uploaded   uint   `url:"uploaded"`
 	Downloaded uint   `url:"downloaded"`
 	Left       uint   `url:"left"`
 	Event      string `url:"event"`
+	Compact    bool   `url:"compact"`
 }

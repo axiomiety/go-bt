@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 )
 
@@ -63,12 +64,19 @@ func main() {
 		obj := getDictFromFile(trackerTorrentFile)
 		infoDict := obj["info"].(map[string]any)
 		digest := torrent.CalculateInfoHashFromInfoDict(infoDict)
-		baseUrl := obj["announce"].(string)
+		baseUrl, err := url.Parse(obj["announce"].(string))
+		common.Check(err)
 		q := data.TrackerQuery{
 			InfoHash: tracker.EncodeInfoHash(digest),
-			PeerId:   "-TD18327382910944852",
+			PeerId:   tracker.EncodeInfoHash([20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+			Port:     6688,
+			Compact:  true,
 		}
-		fmt.Printf("%s?%s", baseUrl, tracker.ToQueryString(&q))
+		resp := tracker.QueryTrackerRaw(baseUrl, &q)
+		raw := bencode.ParseBencoded2(bytes.NewReader(resp))
+		b, err := json.MarshalIndent(raw, "", "  ")
+		common.Check(err)
+		fmt.Printf("%s", string(b))
 	default:
 		panic("Unknown option!")
 	}

@@ -1,9 +1,15 @@
 package tracker
 
 import (
+	"axiomiety/go-bt/bencode"
+	"axiomiety/go-bt/common"
 	"axiomiety/go-bt/data"
+	"bytes"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 )
@@ -41,12 +47,36 @@ func ToQueryString(q *data.TrackerQuery) string {
 			val := reflect.ValueOf(q).Elem().FieldByName(f.Name).Interface()
 			switch f.Type.Kind() {
 			case reflect.String:
-				pairs = append(pairs, fmt.Sprintf("%s=%s", tag, val))
+				// empty strings like an empty event= can cause trackers to reject
+				// our request
+				if val != "" {
+					pairs = append(pairs, fmt.Sprintf("%s=%s", tag, val))
+				}
 			case reflect.Uint:
 				pairs = append(pairs, fmt.Sprintf("%s=%d", tag, val))
+			case reflect.Bool:
+				boolAsInt := 0
+				if val.(bool) {
+					boolAsInt = 1
+				}
+				pairs = append(pairs, fmt.Sprintf("%s=%d", tag, boolAsInt))
 			}
 		}
 
 	}
 	return strings.Join(pairs, "&")
+}
+
+func QueryTrackerRaw(t *url.URL, q *data.TrackerQuery) []byte {
+	t.RawQuery = ToQueryString(q)
+	resp, err := http.Get(t.String())
+	common.Check(err)
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	common.Check(err)
+	return bodyBytes
+}
+
+func QueryTracker(t *url.URL, q *data.TrackerQuery) *data.BETrackerResponse {
+	return bencode.ParseFromReader[data.BETrackerResponse](bytes.NewReader(QueryTrackerRaw(t, q)))
 }
