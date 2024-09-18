@@ -7,6 +7,7 @@ import (
 	"axiomiety/go-bt/torrent"
 	"axiomiety/go-bt/tracker"
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -58,7 +59,7 @@ func main() {
 		infoHashCmd.Parse(os.Args[2:])
 		obj := getDictFromFile(infoHashFile)
 		digest := torrent.CalculateInfoHashFromInfoDict(obj["info"].(map[string]any))
-		fmt.Printf("hex: %x\nurl: %s\n", digest, tracker.EncodeInfoHash(digest))
+		fmt.Printf("hex: %x\nurl: %s\n", digest, tracker.EncodeBytes(digest))
 	case "tracker":
 		trackerCmd.Parse(os.Args[2:])
 		obj := getDictFromFile(trackerTorrentFile)
@@ -66,11 +67,14 @@ func main() {
 		digest := torrent.CalculateInfoHashFromInfoDict(infoDict)
 		baseUrl, err := url.Parse(obj["announce"].(string))
 		common.Check(err)
+		// generate a random peer ID
+		peerId := make([]byte, 20)
+		rand.Read(peerId)
 		q := data.TrackerQuery{
-			InfoHash: tracker.EncodeInfoHash(digest),
-			PeerId:   tracker.EncodeInfoHash([20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+			InfoHash: tracker.EncodeBytes(digest),
+			PeerId:   tracker.EncodeBytes([20]byte(peerId)),
 			Port:     6688,
-			Compact:  true,
+			Compact:  false,
 		}
 		resp := tracker.QueryTrackerRaw(baseUrl, &q)
 		raw := bencode.ParseBencoded2(bytes.NewReader(resp))

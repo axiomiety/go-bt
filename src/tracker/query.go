@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-func EncodeInfoHash(infoHash [20]byte) string {
+func EncodeBytes(infoHash [20]byte) string {
 	var sb strings.Builder
 	for _, val := range infoHash {
 		sb.WriteString(encodeByte(val))
@@ -69,6 +69,7 @@ func ToQueryString(q *data.TrackerQuery) string {
 
 func QueryTrackerRaw(t *url.URL, q *data.TrackerQuery) []byte {
 	t.RawQuery = ToQueryString(q)
+	fmt.Printf("u:%s\n", t.String())
 	resp, err := http.Get(t.String())
 	common.Check(err)
 	defer resp.Body.Close()
