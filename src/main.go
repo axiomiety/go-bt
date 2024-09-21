@@ -44,6 +44,8 @@ func main() {
 
 	trackerCmd := flag.NewFlagSet("tracker", flag.ExitOnError)
 	trackerTorrentFile := trackerCmd.String("torrent", "-", "file/stdin")
+	trackerDir := trackerCmd.String("dir", "", "directory with torrents, defaults to current directory")
+	trackerPort := trackerCmd.Int("port", 8080, "tracker listening port")
 
 	switch os.Args[1] {
 	case "bencode":
@@ -62,25 +64,46 @@ func main() {
 		fmt.Printf("hex: %x\nurl: %s\n", digest, tracker.EncodeBytes(digest))
 	case "tracker":
 		trackerCmd.Parse(os.Args[2:])
-		obj := getDictFromFile(trackerTorrentFile)
-		infoDict := obj["info"].(map[string]any)
-		digest := torrent.CalculateInfoHashFromInfoDict(infoDict)
-		baseUrl, err := url.Parse(obj["announce"].(string))
-		common.Check(err)
-		// generate a random peer ID
-		peerId := make([]byte, 20)
-		rand.Read(peerId)
-		q := data.TrackerQuery{
-			InfoHash: tracker.EncodeBytes(digest),
-			PeerId:   tracker.EncodeBytes([20]byte(peerId)),
-			Port:     6688,
-			Compact:  false,
+		if trackerTorrentFile != nil && trackerPort != nil {
+			panic("you can only provide one of -torrent or -port")
 		}
-		resp := tracker.QueryTrackerRaw(baseUrl, &q)
-		raw := bencode.ParseBencoded2(bytes.NewReader(resp))
-		b, err := json.MarshalIndent(raw, "", "  ")
-		common.Check(err)
-		fmt.Printf("%s", string(b))
+		fmt.Printf("w00t")
+		if trackerTorrentFile != nil {
+			obj := getDictFromFile(trackerTorrentFile)
+			infoDict := obj["info"].(map[string]any)
+			digest := torrent.CalculateInfoHashFromInfoDict(infoDict)
+			baseUrl, err := url.Parse(obj["announce"].(string))
+			common.Check(err)
+			// generate a random peer ID
+			peerId := make([]byte, 20)
+			rand.Read(peerId)
+			q := data.TrackerQuery{
+				InfoHash: tracker.EncodeBytes(digest),
+				PeerId:   tracker.EncodeBytes([20]byte(peerId)),
+				Port:     6688,
+				Compact:  false,
+			}
+			resp := tracker.QueryTrackerRaw(baseUrl, &q)
+			raw := bencode.ParseBencoded2(bytes.NewReader(resp))
+			b, err := json.MarshalIndent(raw, "", "  ")
+			common.Check(err)
+			fmt.Printf("%s", string(b))
+		} else if trackerPort != nil {
+			// serve 'em trackers!
+			var directory string
+			if trackerDir == nil {
+				cwd, err := os.Getwd()
+				common.Check(err)
+				directory = cwd
+			} else {
+				directory = *trackerDir
+			}
+			tracker := &tracker.TrackerServer{
+				Directory: directory,
+				Port:      int32(*trackerPort),
+			}
+			tracker.Serve()
+		}
 	default:
 		panic("Unknown option!")
 	}
