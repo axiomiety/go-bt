@@ -44,6 +44,7 @@ func main() {
 
 	trackerCmd := flag.NewFlagSet("tracker", flag.ExitOnError)
 	trackerTorrentFile := trackerCmd.String("torrent", "-", "file/stdin")
+	trackerServe := trackerCmd.Bool("serve", false, "serve")
 	trackerDir := trackerCmd.String("dir", "", "directory with torrents, defaults to current directory")
 	trackerPort := trackerCmd.Int("port", 8080, "tracker listening port")
 
@@ -64,11 +65,22 @@ func main() {
 		fmt.Printf("hex: %x\nurl: %s\n", digest, tracker.EncodeBytes(digest))
 	case "tracker":
 		trackerCmd.Parse(os.Args[2:])
-		if trackerTorrentFile != nil && trackerPort != nil {
-			panic("you can only provide one of -torrent or -port")
-		}
-		fmt.Printf("w00t")
-		if trackerTorrentFile != nil {
+		if *trackerServe {
+			// serve 'em trackers!
+			var directory string
+			if *trackerDir == "" {
+				cwd, err := os.Getwd()
+				common.Check(err)
+				directory = cwd
+			} else {
+				directory = *trackerDir
+			}
+			tracker := &tracker.TrackerServer{
+				Directory: directory,
+				Port:      int32(*trackerPort),
+			}
+			tracker.Serve()
+		} else {
 			obj := getDictFromFile(trackerTorrentFile)
 			infoDict := obj["info"].(map[string]any)
 			digest := torrent.CalculateInfoHashFromInfoDict(infoDict)
@@ -88,21 +100,6 @@ func main() {
 			b, err := json.MarshalIndent(raw, "", "  ")
 			common.Check(err)
 			fmt.Printf("%s", string(b))
-		} else if trackerPort != nil {
-			// serve 'em trackers!
-			var directory string
-			if trackerDir == nil {
-				cwd, err := os.Getwd()
-				common.Check(err)
-				directory = cwd
-			} else {
-				directory = *trackerDir
-			}
-			tracker := &tracker.TrackerServer{
-				Directory: directory,
-				Port:      int32(*trackerPort),
-			}
-			tracker.Serve()
 		}
 	default:
 		panic("Unknown option!")
