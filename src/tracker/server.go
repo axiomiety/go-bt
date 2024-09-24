@@ -5,8 +5,10 @@ import (
 	"axiomiety/go-bt/common"
 	"axiomiety/go-bt/data"
 	"axiomiety/go-bt/torrent"
+	"bytes"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 )
@@ -44,7 +46,7 @@ func (t *TrackerServer) loadTorrents() {
 }
 
 func (t *TrackerServer) Serve() {
-	log.Printf("serving torrents from %s", t.Directory)
+	log.Printf("serving torrents from %s on :%d", t.Directory, t.Port)
 	if t.Cache == nil {
 		t.Cache = &TrackerCache{
 			Interval: 30,
@@ -52,4 +54,34 @@ func (t *TrackerServer) Serve() {
 		}
 	}
 	t.loadTorrents()
+
+	http.HandleFunc("/announce", t.announce)
+	http.ListenAndServe(fmt.Sprintf(":%d", t.Port), nil)
+}
+
+func (t *TrackerServer) announce(w http.ResponseWriter, req *http.Request) {
+	query := req.URL.Query()
+	infoHash := [20]byte{}
+	// this has already been decoded for us
+	copy(infoHash[:], query.Get("info_hash"))
+
+	sendFailure := func(reason string) {
+		response := map[string]any{
+			"failure reason": reason,
+		}
+		buffer := &bytes.Buffer{}
+		bencode.Encode(buffer, response)
+		w.Write(buffer.Bytes())
+	}
+
+	if _, found := t.Cache.Store[infoHash]; found {
+		// quick sanity checks on the input
+		peerId := query.Get("peer_id")
+		peerPortStr := query.Get("port")
+		// let's see if we need to add the caller to our list of peers
+		fmt.Printf("%s:%s\n", peerId, peerPortStr)
+
+	} else {
+		sendFailure("unknown info hash")
+	}
 }
