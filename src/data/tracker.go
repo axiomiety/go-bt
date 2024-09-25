@@ -1,9 +1,9 @@
 package data
 
 type BEPeer struct {
-	Id   string `bencode:"peer id"`
+	Id   string `bencode:"peer_id"`
 	IP   string `bencode:"ip"`
-	Port int64  `bencode:"port"`
+	Port uint32 `bencode:"port"`
 }
 
 type BETrackerResponse struct {

@@ -60,6 +60,8 @@ func ToQueryString(q *data.TrackerQuery) string {
 					boolAsInt = 1
 				}
 				pairs = append(pairs, fmt.Sprintf("%s=%d", tag, boolAsInt))
+			default:
+				panic(fmt.Sprintf("unknown value for tag=%s", tag))
 			}
 		}
 
