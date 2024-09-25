@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"sync"
 )
 
 func getDictFromFile(file *string) map[string]any {
@@ -75,9 +76,11 @@ func main() {
 			} else {
 				directory = *trackerDir
 			}
+			var mu sync.Mutex
 			tracker := &tracker.TrackerServer{
 				Directory: directory,
 				Port:      int32(*trackerPort),
+				Lock:      &mu,
 			}
 			tracker.Serve()
 		} else {

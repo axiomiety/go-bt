@@ -7,6 +7,7 @@ import (
 	"axiomiety/go-bt/torrent"
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -41,12 +42,11 @@ func (t *TrackerServer) removeStalePeers(ctx context.Context) {
 			return
 		case <-ticker.C:
 			t.Lock.Lock()
-			defer t.Lock.Unlock()
-			now := time.Now()
 			// this is essentially n seconds ago - any peer that hasn't
 			// given us a hearbeat since is considered stale
+			now := time.Now()
 			timeThreshold := now.Add(time.Duration(-t.Cache.Interval) * time.Second)
-
+			log.Print("checking for stale peers")
 			for infoHash, peers := range t.Cache.PeersLastSeen {
 				peerIdsToRemove := make([]string, 0)
 				for peerId, lastSeen := range peers {
@@ -58,7 +58,8 @@ func (t *TrackerServer) removeStalePeers(ctx context.Context) {
 				trackerResponse := t.Cache.Store[infoHash]
 				existingPeers := trackerResponse.Peers
 				peersToKeep := make([]data.BEPeer, 0)
-				// this is quadratic but :shrug:
+
+				// this is quadratic but there shouldn't be many peers to remove :shrug:
 				for _, peer := range existingPeers {
 					shouldRemove := false
 					for _, peerId := range peerIdsToRemove {
@@ -68,18 +69,21 @@ func (t *TrackerServer) removeStalePeers(ctx context.Context) {
 						}
 					}
 					// this is a good peer, let's add it back
-					if !shouldRemove {
-						peersToKeep = append(peersToKeep, peer)
+					if shouldRemove {
+						log.Printf("evicted peer ID %s from %s", hex.EncodeToString([]byte(peer.Id)), hex.EncodeToString(infoHash[:]))
+						delete(peers, peer.Id)
+						t.Cache.PeersLastSeen[infoHash] = peers
 					} else {
-						log.Printf("evicted peer ID %s from %s", peer.Id, infoHash)
+						peersToKeep = append(peersToKeep, peer)
 					}
 				}
 				trackerResponse.Peers = peersToKeep
 				t.Cache.Store[infoHash] = trackerResponse
+				log.Printf("torrent %s has %d peer(s)", hex.EncodeToString(infoHash[:]), len(t.Cache.Store[infoHash].Peers))
 			}
+			t.Lock.Unlock()
 		}
 	}
-
 }
 
 func (t *TrackerServer) loadTorrents() {
@@ -107,8 +111,9 @@ func (t *TrackerServer) Serve() {
 	log.Printf("serving torrents from %s on :%d", t.Directory, t.Port)
 	if t.Cache == nil {
 		t.Cache = &TrackerCache{
-			Interval: 30,
-			Store:    map[[20]byte]data.BETrackerResponse{},
+			Interval:      30,
+			Store:         map[[20]byte]data.BETrackerResponse{},
+			PeersLastSeen: map[[20]byte]map[string]time.Time{},
 		}
 	}
 	t.loadTorrents()
@@ -139,6 +144,8 @@ func (t *TrackerServer) announce(w http.ResponseWriter, req *http.Request) {
 	if trackerResponse, found := t.Cache.Store[infoHash]; found {
 		// this is our own special "key" - if it's provided we'll just
 		// return what we already have
+		t.Lock.Lock()
+		defer t.Lock.Unlock()
 		if query.Get("quiet") == "" {
 			// don't bother parsing anything, just return the response
 			peerId := query.Get("peer_id")
@@ -169,13 +176,22 @@ func (t *TrackerServer) announce(w http.ResponseWriter, req *http.Request) {
 					break
 				}
 			}
-			if !found {
+			if found {
+				// update the peer's TTL for this torrent
+				t.Cache.PeersLastSeen[infoHash][peerId] = time.Now()
+			} else {
 				newPeer := data.BEPeer{
 					Id:   peerId,
 					IP:   peerIp,
 					Port: peerPort,
 				}
 				trackerResponse.Peers = append(trackerResponse.Peers, newPeer)
+				t.Cache.Store[infoHash] = trackerResponse
+				// this may be the first peer we're seeing for this info hash
+				if _, ok := t.Cache.PeersLastSeen[infoHash]; !ok {
+					t.Cache.PeersLastSeen[infoHash] = map[string]time.Time{}
+				}
+				t.Cache.PeersLastSeen[infoHash][peerId] = time.Now()
 			}
 			buffer := &bytes.Buffer{}
 			bencode.Encode(buffer, bencode.ToDict(trackerResponse))
