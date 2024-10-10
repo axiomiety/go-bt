@@ -53,3 +53,11 @@ d8:announce21:http://localhost:808810:created by5:go-bt4:infod5:filesld6:lengthi
 hex: b6e355aa9e2a9b510cf67f0b4be76d9da36ddbbf
 url: %B6%E3U%AA%9E%2A%9BQ%0C%F6%7F%0BK%E7m%9D%A3m%DB%BF
 ```
+
+## Starting your own tracker
+
+```
+❯ go run ./main.go tracker -dir=/tmp serve -port=8080
+2024/10/09 17:43:13 serving torrents from /tmp on :8080
+2024/10/09 17:43:13 torrent file found: files.torrent
+```

@@ -98,7 +98,7 @@ func (t *TrackerServer) loadTorrents() {
 			defer file.Close()
 			btorrent := bencode.ParseFromReader[data.BETorrent](file)
 			t.Cache.Store[torrent.CalculateInfoHash(&btorrent.Info)] = data.BETrackerResponse{
-				Complete:   0,
+				Complete:   1,
 				Incomplete: 0,
 				Peers:      make([]data.BEPeer, 0),
 				Interval:   t.Cache.Interval,
@@ -140,6 +140,7 @@ func (t *TrackerServer) announce(w http.ResponseWriter, req *http.Request) {
 		bencode.Encode(buffer, response)
 		w.Write(buffer.Bytes())
 	}
+	log.Printf("annonce from %s:%s", req.RemoteAddr, req.URL.RawQuery)
 
 	if trackerResponse, found := t.Cache.Store[infoHash]; found {
 		// this is our own special "key" - if it's provided we'll just
@@ -199,6 +200,7 @@ func (t *TrackerServer) announce(w http.ResponseWriter, req *http.Request) {
 		}
 
 	} else {
+		log.Printf("unknown info_hash (hex): %s", hex.EncodeToString([]byte(query.Get("info_hash"))))
 		sendFailure("unknown info hash")
 	}
 }
