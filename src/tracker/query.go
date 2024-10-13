@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -71,7 +72,7 @@ func ToQueryString(q *data.TrackerQuery) string {
 
 func QueryTrackerRaw(t *url.URL, q *data.TrackerQuery) []byte {
 	t.RawQuery = ToQueryString(q)
-	fmt.Printf("u:%s\n", t.String())
+	log.Printf("querying tracker: %s\n", t.String())
 	resp, err := http.Get(t.String())
 	common.Check(err)
 	defer resp.Body.Close()

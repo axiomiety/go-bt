@@ -20,7 +20,8 @@ const (
 )
 
 type PeerHandler struct {
-	Peer       data.BEPeer
+	Peer       *data.BEPeer
+	PeerId     [20]byte
 	InfoHash   [20]byte
 	Connection net.Conn
 	State      StateType
@@ -29,9 +30,10 @@ type PeerHandler struct {
 	Outgoing   chan data.Message
 }
 
-func MakePeerHandler(peer data.BEPeer) *PeerHandler {
+func MakePeerHandler(peer *data.BEPeer, peerId [20]byte) *PeerHandler {
 	return &PeerHandler{
 		Peer:       peer,
+		PeerId:     peerId,
 		Connection: nil,
 		State:      UNSET,
 		Context:    nil,
@@ -44,7 +46,7 @@ func (p *PeerHandler) connect() {
 	address := net.JoinHostPort(p.Peer.IP, fmt.Sprintf("%d", p.Peer.Port))
 	conn, err := net.DialTimeout("tcp", address, time.Second*5)
 	if err != nil {
-		log.Printf("error connecting to peer: %s", err)
+		log.Printf("error connecting to peer %s: %s", hex.EncodeToString([]byte(p.Peer.Id)), err)
 		p.State = ERROR
 		return
 	}
@@ -85,7 +87,7 @@ func (p *PeerHandler) handshake() {
 	// and send ours
 	go func() {
 		defer wg.Done()
-		handshakeMsg := data.GetHanshake(p.Peer.Id, p.InfoHash)
+		handshakeMsg := data.GetHanshake(string(p.PeerId[:]), p.InfoHash)
 		_, err := p.Connection.Write(handshakeMsg.ToBytes())
 		if err != nil {
 			p.State = ERROR

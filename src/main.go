@@ -4,6 +4,7 @@ import (
 	"axiomiety/go-bt/bencode"
 	"axiomiety/go-bt/common"
 	"axiomiety/go-bt/data"
+	"axiomiety/go-bt/peer"
 	"axiomiety/go-bt/torrent"
 	"axiomiety/go-bt/tracker"
 	"bytes"
@@ -11,24 +12,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
+	"log"
 	"net/url"
 	"os"
 	"sync"
 )
-
-func getDictFromFile(file *string) map[string]any {
-	var contents []byte
-	var err error
-	if *file == "-" {
-		contents, err = io.ReadAll(os.Stdin)
-		common.Check(err)
-	} else {
-		contents, err = os.ReadFile(*file)
-		common.Check(err)
-	}
-	return bencode.ParseBencoded2(bytes.NewReader(contents)).(map[string]any)
-}
 
 func main() {
 	bencodeCmd := flag.NewFlagSet("bencode", flag.ExitOnError)
@@ -49,10 +37,13 @@ func main() {
 	trackerDir := trackerCmd.String("dir", "", "directory with torrents, defaults to current directory")
 	trackerPort := trackerCmd.Int("port", 8080, "tracker listening port")
 
+	downloadCmd := flag.NewFlagSet("download", flag.ExitOnError)
+	downloadTorrentFile := downloadCmd.String("torrent", "", "file/stdin")
+
 	switch os.Args[1] {
 	case "bencode":
 		bencodeCmd.Parse(os.Args[2:])
-		obj := getDictFromFile(bencodeDecode)
+		obj := bencode.GetDictFromFile(bencodeDecode)
 		b, err := json.MarshalIndent(obj, "", "  ")
 		common.Check(err)
 		fmt.Printf("%s", string(b))
@@ -61,9 +52,14 @@ func main() {
 		torrent.CreateTorrent(*createOutputFile, *createAnnounce, *createName, *createPieceLength, createCmd.Args()...)
 	case "infohash":
 		infoHashCmd.Parse(os.Args[2:])
-		obj := getDictFromFile(infoHashFile)
+		obj := bencode.GetDictFromFile(infoHashFile)
 		digest := torrent.CalculateInfoHashFromInfoDict(obj["info"].(map[string]any))
 		fmt.Printf("hex: %x\nurl: %s\n", digest, tracker.EncodeBytes(digest))
+	case "download":
+		downloadCmd.Parse(os.Args[2:])
+		manager := peer.FromTorrentFile(*downloadTorrentFile)
+		manager.Run()
+		log.Printf("manager has shut down")
 	case "tracker":
 		trackerCmd.Parse(os.Args[2:])
 		if *trackerServe {
@@ -84,7 +80,7 @@ func main() {
 			}
 			tracker.Serve()
 		} else {
-			obj := getDictFromFile(trackerTorrentFile)
+			obj := bencode.GetDictFromFile(trackerTorrentFile)
 			infoDict := obj["info"].(map[string]any)
 			digest := torrent.CalculateInfoHashFromInfoDict(infoDict)
 			baseUrl, err := url.Parse(obj["announce"].(string))

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -275,4 +276,17 @@ func ToDict(val any) map[string]any {
 
 	}
 	return ret
+}
+
+func GetDictFromFile(file *string) map[string]any {
+	var contents []byte
+	var err error
+	if *file == "-" {
+		contents, err = io.ReadAll(os.Stdin)
+		common.Check(err)
+	} else {
+		contents, err = os.ReadFile(*file)
+		common.Check(err)
+	}
+	return ParseBencoded2(bytes.NewReader(contents)).(map[string]any)
 }

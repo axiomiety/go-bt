@@ -123,7 +123,9 @@ func (t *TrackerServer) Serve() {
 	go t.removeStalePeers(ctx)
 
 	http.HandleFunc("/announce", t.announce)
-	http.ListenAndServe(fmt.Sprintf(":%d", t.Port), nil)
+	// you nmay see an error if e.g. the port is already in use
+	err := http.ListenAndServe(fmt.Sprintf(":%d", t.Port), nil)
+	common.Check(err)
 }
 
 func (t *TrackerServer) announce(w http.ResponseWriter, req *http.Request) {
