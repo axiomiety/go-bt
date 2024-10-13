@@ -17,7 +17,7 @@ import (
 type PeerManager struct {
 	Torrent         *data.BETorrent
 	TrackerResponse *data.BETrackerResponse
-	PeerHandlers    []*PeerHandler
+	PeerHandlers    map[string]*PeerHandler
 	InfoHash        [20]byte
 	PeerId          [20]byte
 	TrackerURL      url.URL
@@ -47,15 +47,18 @@ func (p *PeerManager) UpdatePeers() {
 			// let's not try to connect to ourselves
 			if peer.Id != string(p.PeerId[:]) {
 				log.Printf("enquing peer %s", hex.EncodeToString([]byte(peer.Id)))
-				handler := MakePeerHandler(&peer, p.PeerId)
-				log.Printf("handler.Peer: %s", handler.Peer.Id)
-				p.PeerHandlers = append(p.PeerHandlers, handler)
+				// we're using a range - peer gets reassigned
+				// at every iteration! c.f. the below for a more in-depth explanation
+				// https://medium.com/swlh/use-pointer-of-for-range-loop-variable-in-go-3d3481f7ffc9
+				myPeer := peer
+				handler := MakePeerHandler(&myPeer, p.PeerId)
+				p.PeerHandlers[peer.Id] = handler
 			}
 		}
 	}
 	// we should probably drop ones that are in a bad state
-	for _, handler := range p.PeerHandlers {
-		log.Printf("peerHandler: remote peer %s, state=%d", hex.EncodeToString([]byte(handler.Peer.Id)), handler.State)
+	for _, handler2 := range p.PeerHandlers {
+		log.Printf("peerHandler: remote peer %s, state=%d", hex.EncodeToString([]byte(handler2.Peer.Id)), handler2.State)
 	}
 }
 
@@ -75,9 +78,10 @@ func FromTorrentFile(filename string) *PeerManager {
 	defer file.Close()
 
 	return &PeerManager{
-		Torrent:      bencode.ParseFromReader[data.BETorrent](file),
-		InfoHash:     digest,
-		PeerHandlers: make([]*PeerHandler, 0),
+		Torrent:  bencode.ParseFromReader[data.BETorrent](file),
+		InfoHash: digest,
+		// PeerHandlers: make([]*PeerHandler, 0),
+		PeerHandlers: make(map[string]*PeerHandler),
 		PeerId:       [20]byte(peerId),
 		TrackerURL:   *baseUrl,
 	}
@@ -87,5 +91,5 @@ func (p *PeerManager) Run() {
 	log.Printf("peerManager ID: %s", hex.EncodeToString(p.PeerId[:]))
 	p.QueryTracker()
 	p.UpdatePeers()
-	p.PeerHandlers[0].connect()
+	// p.PeerHandlers[0].connect()
 }
