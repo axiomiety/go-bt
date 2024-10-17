@@ -21,5 +21,6 @@ type TrackerQuery struct {
 	Downloaded uint   `url:"downloaded"`
 	Left       uint   `url:"left"`
 	Event      string `url:"event"`
-	Compact    bool   `url:"compact"`
+	// Compact    bool   `url:"compact"`
+	Numwant uint `url:"numwant"`
 }

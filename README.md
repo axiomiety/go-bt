@@ -61,3 +61,9 @@ url: %B6%E3U%AA%9E%2A%9BQ%0C%F6%7F%0BK%E7m%9D%A3m%DB%BF
 2024/10/09 17:43:13 serving torrents from /tmp on :8080
 2024/10/09 17:43:13 torrent file found: files.torrent
 ```
+
+## Querying a tracker
+
+```
+
+```

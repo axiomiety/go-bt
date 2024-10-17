@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"sync"
 	"time"
 )
 
@@ -25,7 +25,6 @@ type PeerHandler struct {
 	InfoHash   [20]byte
 	Connection net.Conn
 	State      StateType
-	Context    context.Context
 	Incoming   chan data.Message
 	Outgoing   chan data.Message
 }
@@ -36,13 +35,12 @@ func MakePeerHandler(peer *data.BEPeer, peerId [20]byte) *PeerHandler {
 		PeerId:     peerId,
 		Connection: nil,
 		State:      UNSET,
-		Context:    nil,
 		Incoming:   make(chan data.Message),
 		Outgoing:   make(chan data.Message),
 	}
 }
 
-func (p *PeerHandler) connect() {
+func (p *PeerHandler) Connect() {
 	address := net.JoinHostPort(p.Peer.IP, fmt.Sprintf("%d", p.Peer.Port))
 	conn, err := net.DialTimeout("tcp", address, time.Second*5)
 	if err != nil {
@@ -51,26 +49,40 @@ func (p *PeerHandler) connect() {
 		return
 	}
 	p.Connection = conn
+	log.Printf("connected! %s %s", address, err)
 }
 
-func (p *PeerHandler) handshake() {
+func (p *PeerHandler) Handshake() {
 	// a handshake consists of both sending and receiving one!
-	// let's add a timer so we don't wait for the peer indefinitely
-	var wg sync.WaitGroup
-	wg.Add(2)
-	// read the handshake from the peer
-	go func() {
-		defer wg.Done()
-		buf := make([]byte, 1)
-		_, err := p.Connection.Read(buf)
+	// TODO: let's add a timer so we don't wait for the peer indefinitely
+	// var wg sync.WaitGroup
+	func() {
+		// defer wg.Done()
+		handshakeMsg := data.GetHanshake(string(p.PeerId[:]), p.InfoHash)
+		numBytesWritten, err := p.Connection.Write(handshakeMsg.ToBytes())
 		if err != nil {
+			p.State = ERROR
+		}
+		log.Printf("sent hs: %d, err %s", numBytesWritten, err)
+	}()
+	func() {
+		// defer wg.Done()
+		buf := make([]byte, 1)
+		// numBytesRead1, err := p.Connection.Read(buf)
+		numBytesRead1, err := io.ReadFull(p.Connection, buf)
+		log.Printf("read data1: %d	, %v", numBytesRead1, buf)
+		if err != nil {
+			log.Printf("handshake error (pstrlen): %s", err)
 			p.State = ERROR
 			return
 		}
 		pstrLength := buf[0]
 		buf = make([]byte, 49+pstrLength-1)
-		_, err = p.Connection.Read(buf)
+		log.Printf("read data2")
+		numBytesRead2, err := p.Connection.Read(buf)
+		log.Printf("read data3: %d", numBytesRead2)
 		if err != nil {
+			log.Printf("handshake error: %s", err)
 			p.State = ERROR
 			return
 		}
@@ -84,27 +96,27 @@ func (p *PeerHandler) handshake() {
 		// validate it all matches
 		log.Printf("hs: %v", peerHandShake)
 	}()
-	// and send ours
-	go func() {
-		defer wg.Done()
-		handshakeMsg := data.GetHanshake(string(p.PeerId[:]), p.InfoHash)
-		_, err := p.Connection.Write(handshakeMsg.ToBytes())
-		if err != nil {
-			p.State = ERROR
-		}
-	}()
-	wg.Wait()
+
 	// if we reach here, we're ready!
-	p.State = READY
+	if p.State != ERROR {
+		p.State = READY
+	}
 }
 
-func (p *PeerHandler) Loop() {
-	p.connect()
+func (p *PeerHandler) Loop(ctx context.Context) {
+	p.Connect()
+	if p.State == ERROR {
+		return
+	}
 	defer p.Connection.Close()
-	p.handshake()
+	p.Handshake()
+	if p.State == ERROR {
+		return
+	}
+	log.Printf("peer read? %d", p.State)
 	for {
 		select {
-		case <-p.Context.Done():
+		case <-ctx.Done():
 			log.Printf("Context is done, closing connection to %s", hex.EncodeToString([]byte(p.Peer.Id)))
 			p.Connection.Close()
 			return

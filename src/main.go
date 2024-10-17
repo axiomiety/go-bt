@@ -9,6 +9,7 @@ import (
 	"axiomiety/go-bt/tracker"
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"sync"
+	"time"
 )
 
 func main() {
@@ -40,6 +42,12 @@ func main() {
 	downloadCmd := flag.NewFlagSet("download", flag.ExitOnError)
 	downloadTorrentFile := downloadCmd.String("torrent", "", "file/stdin")
 
+	handshakeCmd := flag.NewFlagSet("handshake", flag.ExitOnError)
+	handshakeTorrentFile := handshakeCmd.String("torrent", "", "file/stdin")
+	handshakePeerIp := handshakeCmd.String("ip", "", "IP of peer")
+	handshakePeerPort := handshakeCmd.Uint("port", 0, "IP of peer")
+	handhsakePeerId := handshakeCmd.String("id", "", "peer ID, in hex")
+
 	switch os.Args[1] {
 	case "bencode":
 		bencodeCmd.Parse(os.Args[2:])
@@ -60,6 +68,24 @@ func main() {
 		manager := peer.FromTorrentFile(*downloadTorrentFile)
 		manager.Run()
 		log.Printf("manager has shut down")
+	case "handshake":
+		handshakeCmd.Parse(os.Args[2:])
+		obj := bencode.GetDictFromFile(handshakeTorrentFile)
+		infoDict := obj["info"].(map[string]any)
+		digest := torrent.CalculateInfoHashFromInfoDict(infoDict)
+		peerId, err := hex.DecodeString(*handhsakePeerId)
+		common.Check(err)
+		bepeer := data.BEPeer{
+			IP:   *handshakePeerIp,
+			Port: uint32(*handshakePeerPort),
+			Id:   string(peerId),
+		}
+		ph := peer.MakePeerHandler(&bepeer, [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0})
+		ph.InfoHash = digest
+		ph.Connect()
+		ph.Handshake()
+		time.Sleep(20 * time.Second)
+
 	case "tracker":
 		trackerCmd.Parse(os.Args[2:])
 		if *trackerServe {
@@ -92,7 +118,10 @@ func main() {
 				InfoHash: tracker.EncodeBytes(digest),
 				PeerId:   tracker.EncodeBytes([20]byte(peerId)),
 				Port:     6688,
-				Compact:  false,
+				// Compact:  false,
+				// if it's too small, some trackers won't send us peers!
+				Left:    45536,
+				Numwant: 100,
 			}
 			resp := tracker.QueryTrackerRaw(baseUrl, &q)
 			raw := bencode.ParseBencoded2(bytes.NewReader(resp))

@@ -7,11 +7,15 @@ import (
 	"axiomiety/go-bt/torrent"
 	"axiomiety/go-bt/tracker"
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"os"
+	"time"
 )
 
 type PeerManager struct {
@@ -19,6 +23,7 @@ type PeerManager struct {
 	TrackerResponse *data.BETrackerResponse
 	PeerHandlers    map[string]*PeerHandler
 	InfoHash        [20]byte
+	Context         context.Context
 	PeerId          [20]byte
 	TrackerURL      url.URL
 }
@@ -29,8 +34,8 @@ func (p *PeerManager) QueryTracker() {
 		InfoHash: tracker.EncodeBytes(p.InfoHash),
 		PeerId:   tracker.EncodeBytes(p.PeerId),
 		// eventually that'll be an option
-		Port:    6688,
-		Compact: false,
+		Port: 6688,
+		// Compact: false,
 	}
 	resp := tracker.QueryTrackerRaw(&p.TrackerURL, &q)
 	p.TrackerResponse = bencode.ParseFromReader[data.BETrackerResponse](bytes.NewReader(resp))
@@ -44,9 +49,13 @@ func (p *PeerManager) UpdatePeers() {
 	// or ones that are chocked
 	if len(p.PeerHandlers) < 5 {
 		for _, peer := range p.TrackerResponse.Peers {
+			// do we know the peer?
+			if _, ok := p.PeerHandlers[peer.Id]; ok {
+				continue
+			}
 			// let's not try to connect to ourselves
-			if peer.Id != string(p.PeerId[:]) {
-				log.Printf("enquing peer %s", hex.EncodeToString([]byte(peer.Id)))
+			if peer.Id != string(p.PeerId[:]) && peer.Port != 6688 && peer.IP[0] == '1' {
+				log.Printf("enquing peer %s - %s", hex.EncodeToString([]byte(peer.Id)), net.JoinHostPort(peer.IP, fmt.Sprintf("%d", peer.Port)))
 				// we're using a range - peer gets reassigned
 				// at every iteration! c.f. the below for a more in-depth explanation
 				// https://medium.com/swlh/use-pointer-of-for-range-loop-variable-in-go-3d3481f7ffc9
@@ -78,9 +87,8 @@ func FromTorrentFile(filename string) *PeerManager {
 	defer file.Close()
 
 	return &PeerManager{
-		Torrent:  bencode.ParseFromReader[data.BETorrent](file),
-		InfoHash: digest,
-		// PeerHandlers: make([]*PeerHandler, 0),
+		Torrent:      bencode.ParseFromReader[data.BETorrent](file),
+		InfoHash:     digest,
 		PeerHandlers: make(map[string]*PeerHandler),
 		PeerId:       [20]byte(peerId),
 		TrackerURL:   *baseUrl,
@@ -89,7 +97,19 @@ func FromTorrentFile(filename string) *PeerManager {
 
 func (p *PeerManager) Run() {
 	log.Printf("peerManager ID: %s", hex.EncodeToString(p.PeerId[:]))
+	// ctx, cancelFunc := context.WithCancel(context.Background())
+	// defer func() {
+	// 	cancelFunc()
+	// }()
 	p.QueryTracker()
 	p.UpdatePeers()
-	// p.PeerHandlers[0].connect()
+	for _, peer := range p.PeerHandlers {
+		peer.Connect()
+		if peer.State == UNSET {
+			// eventually this will need to go into a goroutine
+			// go peer.Loop(ctx)
+			peer.Handshake()
+		}
+	}
+	time.Sleep(20 * time.Second)
 }
