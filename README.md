@@ -65,5 +65,17 @@ url: %B6%E3U%AA%9E%2A%9BQ%0C%F6%7F%0BK%E7m%9D%A3m%DB%BF
 ## Querying a tracker
 
 ```
-
+❯ go run ./main.go tracker -torrent=/Users/axiomiety/Downloads/ubuntu-24.10-desktop-amd64.iso.torrent
+2024/10/19 21:27:07 querying tracker: https://torrent.ubuntu.com/announce?info_hash=%3F%9A%AC%15%8C%7D%E8%DF%CA%B1q%EAX%A1z%AB%DF%7F%BC%93&peer_id=%02%F9%5DB%B14%AEJ%A9A%89%A1%15%E7%E2%3D%E7%8D3q&port=6688&uploaded=0&downloaded=0&left=45536&numwant=100
+{
+  "complete": 626,
+  "incomplete": 58,
+  "interval": 1800,
+  "peers": [
+    {
+      "ip": "2607:5300:60:8460::1",
+      "peer id": "-lt0D80-\ufffd\ufffd\ufffd\u0016'MѓY\ufffd\u0011;",
+      "port": 20757
+    },
+  ...
 ```

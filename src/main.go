@@ -82,8 +82,7 @@ func main() {
 		}
 		ph := peer.MakePeerHandler(&bepeer, [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0})
 		ph.InfoHash = digest
-		ph.Connect()
-		ph.Handshake()
+		ph.DoItAll()
 		time.Sleep(20 * time.Second)
 
 	case "tracker":

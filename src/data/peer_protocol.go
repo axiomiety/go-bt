@@ -10,18 +10,14 @@ type Handshake struct {
 	PeerId   [20]byte
 }
 
-func GetHanshake(peerIdStr string, infoHash [20]byte) Handshake {
-	var peerId [20]byte
-	copy(peerId[:], []byte(peerIdStr))
+func GetHanshake(peerId [20]byte, infoHash [20]byte) *Handshake {
 	pstr := []byte("BitTorrent protocol")
-	handshake := Handshake{
+	return &Handshake{
 		PstrLen:  byte(len(pstr)),
 		Pstr:     pstr,
 		InfoHash: infoHash,
 		PeerId:   peerId,
 	}
-
-	return handshake
 }
 
 func (h *Handshake) ToBytes() []byte {
