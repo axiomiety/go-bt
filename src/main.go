@@ -17,7 +17,6 @@ import (
 	"net/url"
 	"os"
 	"sync"
-	"time"
 )
 
 func main() {
@@ -75,16 +74,17 @@ func main() {
 		digest := torrent.CalculateInfoHashFromInfoDict(infoDict)
 		peerId, err := hex.DecodeString(*handhsakePeerId)
 		common.Check(err)
+		peerIdB := make([]byte, 20)
+		rand.Read(peerId)
 		bepeer := data.BEPeer{
 			IP:   *handshakePeerIp,
 			Port: uint32(*handshakePeerPort),
 			Id:   string(peerId),
 		}
-		ph := peer.MakePeerHandler(&bepeer, [20]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0})
-		ph.InfoHash = digest
-		ph.DoItAll()
-		time.Sleep(20 * time.Second)
-
+		ph := peer.MakePeerHandler(&bepeer, [20]byte(peerIdB), digest)
+		ph.Connect()
+		ph.Handshake()
+		log.Printf("peer state: %d", ph.State)
 	case "tracker":
 		trackerCmd.Parse(os.Args[2:])
 		if *trackerServe {

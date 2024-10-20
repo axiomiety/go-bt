@@ -1,14 +1,17 @@
 package peer
 
 import (
-	"axiomiety/go-bt/common"
 	"axiomiety/go-bt/data"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
+	"sync"
 	"time"
 )
 
@@ -26,24 +29,24 @@ type PeerHandler struct {
 	InfoHash   [20]byte
 	Connection net.Conn
 	State      StateType
-	Incoming   chan data.Message
-	Outgoing   chan data.Message
+	Incoming   chan *data.Message
+	Outgoing   chan *data.Message
 }
 
-func MakePeerHandler(peer *data.BEPeer, peerId [20]byte) *PeerHandler {
+func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte) *PeerHandler {
 	return &PeerHandler{
 		Peer:       peer,
 		PeerId:     peerId,
+		InfoHash:   infoHash,
 		Connection: nil,
 		State:      UNSET,
-		Incoming:   make(chan data.Message),
-		Outgoing:   make(chan data.Message),
+		Incoming:   make(chan *data.Message),
+		Outgoing:   make(chan *data.Message),
 	}
 }
 
 func (p *PeerHandler) Connect() {
 	address := net.JoinHostPort(p.Peer.IP, fmt.Sprintf("%d", p.Peer.Port))
-	log.Printf("connecting to %s", address)
 	conn, err := net.DialTimeout("tcp", address, time.Second*5)
 	if err != nil {
 		log.Printf("error connecting to peer %s: %s", hex.EncodeToString([]byte(p.Peer.Id)), err)
@@ -51,81 +54,39 @@ func (p *PeerHandler) Connect() {
 		return
 	}
 	p.Connection = conn
-	log.Printf("connected! %s %s", address, err)
-}
-
-func ReadHandshake(reader io.Reader) {
-	// read 1 byte for the len of Pstr
-	// then read 49 + len
-	buf := make([]byte, 1)
-	_, err := io.ReadFull(reader, buf)
-	common.Check(err)
-	pstrLength := buf[0]
-	buf = make([]byte, 49+pstrLength-1)
-	_, err = io.ReadFull(reader, buf)
-	common.Check(err)
-	log.Printf("response received")
-}
-
-func (p *PeerHandler) DoItAll() {
-	address := net.JoinHostPort(p.Peer.IP, fmt.Sprintf("%d", p.Peer.Port))
-	log.Printf("-- connecting to %s", address)
-	conn, err := net.DialTimeout("tcp", address, time.Second*10)
-	common.Check(err)
-	log.Printf("connected?")
-
-	handshakeMsg := data.GetHanshake(p.PeerId, p.InfoHash)
-	numBytesWritten, err := conn.Write(handshakeMsg.ToBytes())
-	common.Check(err)
-	log.Printf("wrote %d bytes", numBytesWritten)
-	// lr := io.LimitReader(conn, 1)
-
-	// if _, err := io.Copy(os.Stdout, lr); err != nil {
-	// 	log.Fatal(err)
-	// }
-	buf := make([]byte, 1)
-	// numBytesRead1, err := p.Connection.Read(buf)
-	for {
-		numBytesRead1, _ := conn.Read(buf)
-		if numBytesRead1 > 0 {
-			break
-		}
-	}
-	log.Printf("done: %v", buf)
-	common.Check(err)
+	log.Printf("connected to %s", address)
 }
 
 func (p *PeerHandler) Handshake() {
 	// a handshake consists of both sending and receiving one!
-	// TODO: let's add a timer so we don't wait for the peer indefinitely
-	// var wg sync.WaitGroup
-	func() {
-		// defer wg.Done()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
 		handshakeMsg := data.GetHanshake(p.PeerId, p.InfoHash)
+		// fmt.Printf("%+v", handshakeMsg)
 		numBytesWritten, err := p.Connection.Write(handshakeMsg.ToBytes())
-		if err != nil {
+		if err != nil || numBytesWritten == 0 {
 			p.State = ERROR
 		}
-		log.Printf("sent hs: %d, err %s", numBytesWritten, err)
 	}()
-	//ReadHandshake(p.Connection)
-	func() {
-		// defer wg.Done()
+
+	go func() {
+		defer wg.Done()
 		buf := make([]byte, 1)
-		// numBytesRead1, err := p.Connection.Read(buf)
-		numBytesRead1, err := io.ReadFull(p.Connection, buf)
-		log.Printf("read data1: %d	, %v", numBytesRead1, buf)
-		if err != nil && err != io.EOF {
+		// it really shouldn't take the peer that long to get back with
+		// a handshake - if it does, we're probably not getting anything from them
+		p.Connection.SetReadDeadline(time.Now().Add(5 * time.Second))
+		numBytesRead, err := io.ReadFull(p.Connection, buf)
+		if err != nil && err != io.EOF || numBytesRead == 0 {
 			log.Printf("handshake error (pstrlen): %s", err)
 			p.State = ERROR
 			return
 		}
 		pstrLength := buf[0]
 		buf = make([]byte, 49+pstrLength-1)
-		log.Printf("read data2")
-		numBytesRead2, err := p.Connection.Read(buf)
-		log.Printf("read data3: %d", numBytesRead2)
-		if err != nil {
+		numBytesRead, err = p.Connection.Read(buf)
+		if err != nil && err != io.EOF || numBytesRead == 0 {
 			log.Printf("handshake error: %s", err)
 			p.State = ERROR
 			return
@@ -138,12 +99,85 @@ func (p *PeerHandler) Handshake() {
 			PeerId:   [20]byte(buf[pstrLength+8+20:]),
 		}
 		// validate it all matches
-		log.Printf("hs: %v", peerHandShake)
+		if peerHandShake.InfoHash != p.InfoHash {
+			log.Printf("info_hash doesn't match!")
+			p.State = ERROR
+		}
+		// peer spoofing?
+		// if string(peerHandShake.PeerId[:]) != p.Peer.Id {
+		// 	log.Printf("peer_id doesn't match!")
+		// 	p.State = ERROR
+		// }
 	}()
-
+	wg.Wait()
 	// if we reach here, we're ready!
 	if p.State != ERROR {
 		p.State = READY
+	}
+}
+
+func getMessage(conn net.Conn) (*data.Message, error) {
+
+	timeoutWaitDuration := 5 * time.Second
+	conn.SetReadDeadline(time.Now().Add(timeoutWaitDuration))
+	header := make([]byte, 4)
+	numBytesRead, err := io.ReadFull(conn, header)
+
+	processBadResponse := func(err error, numBytesRead int) (*data.Message, error) {
+		if numBytesRead == 0 {
+			log.Printf("no data!")
+			return &data.Message{}, errors.New("no data")
+		} else if os.IsTimeout(err) {
+			log.Println("timed out reading length header from client")
+			return &data.Message{}, err
+		} else {
+			return &data.Message{}, err
+		}
+	}
+
+	if (err != nil && err != io.EOF) || numBytesRead == 0 {
+		return processBadResponse(err, numBytesRead)
+	}
+
+	length := binary.BigEndian.Uint32(header[:])
+
+	// keep-alive
+	if length == 0 {
+		return &data.Message{}, nil
+	}
+
+	buffer := make([]byte, length)
+	numBytesRead, err = io.ReadFull(conn, buffer)
+	if (err != nil && err != io.EOF) || numBytesRead == 0 {
+		return processBadResponse(err, numBytesRead)
+	}
+
+	msg := &data.Message{
+		Length:    [4]byte(header),
+		MessageId: buffer[0],
+	}
+
+	// some messages don't have a payload
+	if len(buffer) > 1 {
+		msg.Payload = buffer[1:]
+	}
+
+	return msg, nil
+}
+
+func (p *PeerHandler) Listen(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("shutting down listener")
+		default:
+			msg, err := getMessage(p.Connection)
+			if err != nil {
+				log.Printf("error: %s", err)
+				break
+			}
+			p.Incoming <- msg
+		}
 	}
 }
 
@@ -157,7 +191,8 @@ func (p *PeerHandler) Loop(ctx context.Context) {
 	if p.State == ERROR {
 		return
 	}
-	log.Printf("peer read? %d", p.State)
+	log.Printf("lock 'n load!")
+	go p.Listen(ctx)
 	for {
 		select {
 		case <-ctx.Done():

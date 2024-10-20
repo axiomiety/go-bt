@@ -39,6 +39,7 @@ func (p *PeerManager) QueryTracker() {
 	}
 	resp := tracker.QueryTrackerRaw(&p.TrackerURL, &q)
 	p.TrackerResponse = bencode.ParseFromReader[data.BETrackerResponse](bytes.NewReader(resp))
+	log.Print("tracker responded")
 }
 
 func (p *PeerManager) UpdatePeers() {
@@ -51,16 +52,17 @@ func (p *PeerManager) UpdatePeers() {
 		for _, peer := range p.TrackerResponse.Peers {
 			// do we know the peer?
 			if _, ok := p.PeerHandlers[peer.Id]; ok {
+				log.Printf("peer %s is already known, skipping", hex.EncodeToString([]byte(peer.Id)))
 				continue
 			}
 			// let's not try to connect to ourselves
-			if peer.Id != string(p.PeerId[:]) && peer.Port != 6688 && peer.IP[0] == '1' {
+			if peer.Id != string(p.PeerId[:]) && peer.Port != 6688 {
 				log.Printf("enquing peer %s - %s", hex.EncodeToString([]byte(peer.Id)), net.JoinHostPort(peer.IP, fmt.Sprintf("%d", peer.Port)))
 				// we're using a range - peer gets reassigned
 				// at every iteration! c.f. the below for a more in-depth explanation
 				// https://medium.com/swlh/use-pointer-of-for-range-loop-variable-in-go-3d3481f7ffc9
 				myPeer := peer
-				handler := MakePeerHandler(&myPeer, p.PeerId)
+				handler := MakePeerHandler(&myPeer, p.PeerId, p.InfoHash)
 				p.PeerHandlers[peer.Id] = handler
 			}
 		}
@@ -97,18 +99,16 @@ func FromTorrentFile(filename string) *PeerManager {
 
 func (p *PeerManager) Run() {
 	log.Printf("peerManager ID: %s", hex.EncodeToString(p.PeerId[:]))
-	// ctx, cancelFunc := context.WithCancel(context.Background())
-	// defer func() {
-	// 	cancelFunc()
-	// }()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer func() {
+		cancelFunc()
+	}()
 	p.QueryTracker()
 	p.UpdatePeers()
 	for _, peer := range p.PeerHandlers {
-		peer.Connect()
 		if peer.State == UNSET {
 			// eventually this will need to go into a goroutine
-			// go peer.Loop(ctx)
-			peer.Handshake()
+			go peer.Loop(ctx)
 		}
 	}
 	time.Sleep(20 * time.Second)

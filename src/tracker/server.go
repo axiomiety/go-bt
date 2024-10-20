@@ -183,6 +183,9 @@ func (t *TrackerServer) announce(w http.ResponseWriter, req *http.Request) {
 				// update the peer's TTL for this torrent
 				t.Cache.PeersLastSeen[infoHash][peerId] = time.Now()
 			} else {
+				// note that the same peer may announce on both ip4 and ip6
+				// with the same peer ID - in which case we take whichever
+				// one comes first
 				newPeer := data.BEPeer{
 					Id:   peerId,
 					IP:   peerIp,
