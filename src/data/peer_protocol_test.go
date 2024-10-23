@@ -11,3 +11,10 @@ func TestKeepAlive(t *testing.T) {
 		t.Errorf("was expecting [0,0,0,0], got %v", keepalive.ToBytes())
 	}
 }
+
+func TestChoke(t *testing.T) {
+	choke := Choke()
+	if !bytes.Equal(choke.ToBytes(), []byte{0, 0, 0, 1, 0}) {
+		t.Errorf("was expecting [0,0,0,0], got %v", choke.ToBytes())
+	}
+}

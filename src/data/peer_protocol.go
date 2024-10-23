@@ -51,3 +51,9 @@ func (m *Message) ToBytes() []byte {
 func KeepAlive() *Message {
 	return &Message{}
 }
+
+func Choke() *Message {
+	return &Message{
+		Length: [4]byte{0, 0, 0, 1},
+	}
+}
