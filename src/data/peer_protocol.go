@@ -30,16 +30,24 @@ func (h *Handshake) ToBytes() []byte {
 	return buffer.Bytes()
 }
 
+type Message struct {
+	Length    [4]byte
+	MessageId byte
+	Payload   []byte
+}
+
 func (m *Message) ToBytes() []byte {
 	buffer := new(bytes.Buffer)
 	buffer.Write(m.Length[:])
+	// handle the special keep-alive case
+	if m.Length == [4]byte{0, 0, 0, 0} {
+		return buffer.Bytes()
+	}
 	buffer.WriteByte(m.MessageId)
 	buffer.Write(m.Payload)
 	return buffer.Bytes()
 }
 
-type Message struct {
-	Length    [4]byte
-	MessageId byte
-	Payload   []byte
+func KeepAlive() *Message {
+	return &Message{}
 }
