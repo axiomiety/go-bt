@@ -73,9 +73,19 @@ func (b *BitField) HasBlock(idx uint64) bool {
 
 	// find the relevant byte
 	byteIdx := idx / 8
-	// blocks are 0-indexed - and 0%8 is 0, but what we really want is 0x01
-	// for the & below
-	offset := byte(1<<(idx%8) + 1)
-
+	// blocks are 0-indexed
+	offset := byte(1 << (8 - (idx % 8) - 1))
 	return b.Field[byteIdx]&offset > 0
+}
+
+func (b *BitField) UpdateBlock(idx uint64) {
+	if idx > b.NumBlocks {
+		panic(fmt.Sprintf("We only have %d blocks but tried to set block number %d", b.NumBlocks, idx))
+	}
+
+	// find the relevant byte
+	byteIdx := idx / 8
+	// blocks are 0-indexed
+	offset := byte(1 << (8 - (idx % 8) - 1))
+	b.Field[byteIdx] |= offset
 }

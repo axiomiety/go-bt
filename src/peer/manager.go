@@ -26,6 +26,7 @@ type PeerManager struct {
 	Context         context.Context
 	PeerId          [20]byte
 	TrackerURL      url.URL
+	BitFied         data.BitField
 }
 
 func (p *PeerManager) QueryTracker() {

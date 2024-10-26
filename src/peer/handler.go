@@ -31,6 +31,7 @@ type PeerHandler struct {
 	State      StateType
 	Incoming   chan *data.Message
 	Outgoing   chan *data.Message
+	BitField   data.BitField
 }
 
 func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte) *PeerHandler {
