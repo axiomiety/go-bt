@@ -201,6 +201,7 @@ func (p *PeerHandler) Loop(ctx context.Context) {
 			return
 		case msg := <-p.Incoming:
 			log.Printf("msg received: %x", msg.MessageId)
+			log.Printf("payload: %v", msg.Payload)
 		case msg := <-p.Outgoing:
 			log.Printf("msg to send: %x", msg.MessageId)
 		}

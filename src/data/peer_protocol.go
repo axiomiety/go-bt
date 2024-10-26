@@ -1,6 +1,9 @@
 package data
 
-import "bytes"
+import (
+	"bytes"
+	"fmt"
+)
 
 type Handshake struct {
 	PstrLen  byte
@@ -56,4 +59,23 @@ func Choke() *Message {
 	return &Message{
 		Length: [4]byte{0, 0, 0, 1},
 	}
+}
+
+type BitField struct {
+	NumBlocks uint64
+	Field     []byte
+}
+
+func (b *BitField) HasBlock(idx uint64) bool {
+	if idx > b.NumBlocks {
+		panic(fmt.Sprintf("We only have %d blocks but requested block number %d", b.NumBlocks, idx))
+	}
+
+	// find the relevant byte
+	byteIdx := idx / 8
+	// blocks are 0-indexed - and 0%8 is 0, but what we really want is 0x01
+	// for the & below
+	offset := byte(1<<(idx%8) + 1)
+
+	return b.Field[byteIdx]&offset > 0
 }
