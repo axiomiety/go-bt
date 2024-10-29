@@ -78,7 +78,7 @@ func (b *BitField) HasBlock(idx uint64) bool {
 	return b.Field[byteIdx]&offset > 0
 }
 
-func (b *BitField) UpdateBlock(idx uint64) {
+func (b *BitField) SetBlock(idx uint64) {
 	if idx > b.NumBlocks {
 		panic(fmt.Sprintf("We only have %d blocks but tried to set block number %d", b.NumBlocks, idx))
 	}

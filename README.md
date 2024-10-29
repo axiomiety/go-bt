@@ -79,3 +79,18 @@ url: %B6%E3U%AA%9E%2A%9BQ%0C%F6%7F%0BK%E7m%9D%A3m%DB%BF
     },
   ...
 ```
+
+## Downloading a torrent
+
+```
+/V/r/g/src ❯❯❯ go run ./main.go download -torrent=/tmp/files.torrent
+2024/10/29 17:39:56 peerManager ID: fe55a6c5e40651c3537b242f4115c20c3eb1aa08
+2024/10/29 17:39:56 querying tracker: http://localhost:8080/announce?info_hash=%3C%5E%11%8ES%28%D8ezT%16%40%EB%F3%24%94%09%D0%C3%D6&peer_id=%FEU%A6%C5%E4%06Q%C3S%7B%24%2FA%15%C2%0C%3E%B1%AA%08&port=6688&uploaded=0&downloaded=0&left=0&numwant=0
+2024/10/29 17:39:56 tracker responded
+2024/10/29 17:39:56 enquing peer 2d5452343036302d377267343076317977696874 - 127.0.0.1:51413
+2024/10/29 17:39:56 peerHandler: remote peer 2d5452343036302d377267343076317977696874, state=0
+2024/10/29 17:39:56 connected to 127.0.0.1:51413
+2024/10/29 17:39:57 lock 'n load!
+2024/10/29 17:39:57 msg received: 5
+2024/10/29 17:39:57 payload: [255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255]
+```

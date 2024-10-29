@@ -119,7 +119,7 @@ func (p *PeerHandler) Handshake() {
 
 func getMessage(conn net.Conn) (*data.Message, error) {
 
-	timeoutWaitDuration := 5 * time.Second
+	timeoutWaitDuration := 2 * time.Minute
 	conn.SetReadDeadline(time.Now().Add(timeoutWaitDuration))
 	header := make([]byte, 4)
 	numBytesRead, err := io.ReadFull(conn, header)

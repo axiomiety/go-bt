@@ -43,7 +43,7 @@ func TestBitField(t *testing.T) {
 
 	// now for updates
 	for _, idx := range blocksMissing {
-		b.UpdateBlock(idx)
+		b.SetBlock(idx)
 		if !b.HasBlock(3) {
 			t.Errorf("Tried to set block %d but it is still reported as missing", idx)
 		}
