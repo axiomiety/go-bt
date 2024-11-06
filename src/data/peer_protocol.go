@@ -89,3 +89,15 @@ func (b *BitField) SetBlock(idx uint64) {
 	offset := byte(1 << (8 - (idx % 8) - 1))
 	b.Field[byteIdx] |= offset
 }
+
+const (
+	MsgChoke         byte = 0
+	MsgUnchoke       byte = 1
+	MsgInterested    byte = 2
+	MsgNotInterested byte = 3
+	MsgHave          byte = 4
+	MsgBitfield      byte = 5
+	MsgRequest       byte = 6
+	MsgPiece         byte = 7
+	MsgCancel        byte = 8
+)

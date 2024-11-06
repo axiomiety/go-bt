@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,7 @@ type PeerManager struct {
 	Torrent         *data.BETorrent
 	TrackerResponse *data.BETrackerResponse
 	PeerHandlers    map[string]*PeerHandler
+	PeerHandlerLock *sync.Mutex
 	InfoHash        [20]byte
 	Context         context.Context
 	PeerId          [20]byte
@@ -50,6 +52,8 @@ func (p *PeerManager) UpdatePeers() {
 	// we can also discard peers we've had trouble connecting to in the past,
 	// or ones that are chocked
 	if len(p.PeerHandlers) < 5 {
+		p.PeerHandlerLock.Lock()
+		defer p.PeerHandlerLock.Unlock()
 		for _, peer := range p.TrackerResponse.Peers {
 			// do we know the peer?
 			if _, ok := p.PeerHandlers[peer.Id]; ok {
@@ -57,6 +61,7 @@ func (p *PeerManager) UpdatePeers() {
 				continue
 			}
 			// let's not try to connect to ourselves
+			// TODO: fix that hack
 			if peer.Id != string(p.PeerId[:]) && peer.Port != 6688 {
 				log.Printf("enquing peer %s - %s", hex.EncodeToString([]byte(peer.Id)), net.JoinHostPort(peer.IP, fmt.Sprintf("%d", peer.Port)))
 				// we're using a range - peer gets reassigned
@@ -68,9 +73,8 @@ func (p *PeerManager) UpdatePeers() {
 			}
 		}
 	}
-	// we should probably drop ones that are in a bad state
-	for _, handler2 := range p.PeerHandlers {
-		log.Printf("peerHandler: remote peer %s, state=%d", hex.EncodeToString([]byte(handler2.Peer.Id)), handler2.State)
+	for _, handler := range p.PeerHandlers {
+		log.Printf("peerHandler: remote peer %s, state=%d", hex.EncodeToString([]byte(handler.Peer.Id)), handler.State)
 	}
 }
 
@@ -89,28 +93,92 @@ func FromTorrentFile(filename string) *PeerManager {
 	file, _ := os.Open(filename)
 	defer file.Close()
 
+	var mu sync.Mutex
 	return &PeerManager{
-		Torrent:      bencode.ParseFromReader[data.BETorrent](file),
-		InfoHash:     digest,
-		PeerHandlers: make(map[string]*PeerHandler),
-		PeerId:       [20]byte(peerId),
-		TrackerURL:   *baseUrl,
+		Torrent:         bencode.ParseFromReader[data.BETorrent](file),
+		InfoHash:        digest,
+		PeerHandlers:    make(map[string]*PeerHandler),
+		PeerHandlerLock: &mu,
+		PeerId:          [20]byte(peerId),
+		TrackerURL:      *baseUrl,
+	}
+}
+
+func (p *PeerManager) queryTrackerAndUpdatePeersList(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		p.QueryTracker()
+		p.UpdatePeers()
+	}
+}
+
+func (p *PeerManager) refreshPeerPool(ctx context.Context) {
+	peersToRemove := []string{}
+	for peerId, peer := range p.PeerHandlers {
+		switch peer.State {
+		case UNSET:
+			// likely a new peer - let's connect!
+			go peer.Loop(ctx)
+		case ERROR:
+			peersToRemove = append(peersToRemove, peerId)
+		}
+	}
+
+	p.PeerHandlerLock.Lock()
+	defer p.PeerHandlerLock.Unlock()
+	for _, peerId := range peersToRemove {
+		log.Printf("dropping peer %s because it is in an ERROR state", hex.EncodeToString([]byte(peerId)))
+		delete(p.PeerHandlers, peerId)
+	}
+}
+
+func (p *PeerManager) selectPieceToDownload() uint64 {
+	return 0
+}
+
+func (p *PeerManager) assignPieceToPeer(idx uint64) string {
+	// iterate through each peer to see if they have the piece in question
+	for _, peer := range p.PeerHandlers {
+		if peer.State == READY && peer.BitField.HasBlock(idx) {
+			peer.DownloadPiece(idx)
+			return peer.Peer.Id
+		}
 	}
 }
 
 func (p *PeerManager) Run() {
-	log.Printf("peerManager ID: %s", hex.EncodeToString(p.PeerId[:]))
+	log.Printf("peerManager ID (ours): %s", hex.EncodeToString(p.PeerId[:]))
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer func() {
 		cancelFunc()
 	}()
-	p.QueryTracker()
-	p.UpdatePeers()
 	for _, peer := range p.PeerHandlers {
 		if peer.State == UNSET {
 			// eventually this will need to go into a goroutine
 			go peer.Loop(ctx)
 		}
 	}
-	time.Sleep(20 * time.Second)
+
+	// periodic ping to the tracker to ensure we still show up
+	// as a valid peer
+	// TODO: this should ideally have the right event sent out
+	// to the tracker
+	go func(ctx context.Context) {
+		p.queryTrackerAndUpdatePeersList(ctx)
+		time.Sleep(30 * time.Second)
+	}(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			p.refreshPeerPool(ctx)
+			pieceIdx := p.selectPieceToDownload()
+			p.assignPieceToPeer(pieceIdx)
+		}
+		time.Sleep(5 * time.Second)
+	}
 }
