@@ -75,13 +75,17 @@ func Request(index uint32, begin uint32, length uint32) *Message {
 }
 
 type BitField struct {
-	NumBlocks uint64
-	Field     []byte
+	Field []byte
 }
 
-func (b *BitField) HasBlock(idx uint64) bool {
-	if idx > b.NumBlocks {
-		panic(fmt.Sprintf("We only have %d blocks but requested block number %d", b.NumBlocks, idx))
+func (b *BitField) NumBlocks() uint32 {
+	// each byte represents 8 blocks
+	return uint32(cap(b.Field) * 8)
+}
+
+func (b *BitField) HasBlock(idx uint32) bool {
+	if idx > b.NumBlocks() {
+		panic(fmt.Sprintf("We only have %d blocks but requested block number %d", b.NumBlocks(), idx))
 	}
 
 	// find the relevant byte
@@ -91,9 +95,9 @@ func (b *BitField) HasBlock(idx uint64) bool {
 	return b.Field[byteIdx]&offset > 0
 }
 
-func (b *BitField) SetBlock(idx uint64) {
-	if idx > b.NumBlocks {
-		panic(fmt.Sprintf("We only have %d blocks but tried to set block number %d", b.NumBlocks, idx))
+func (b *BitField) SetBlock(idx uint32) {
+	if idx > b.NumBlocks() {
+		panic(fmt.Sprintf("We only have %d blocks but tried to set block number %d", b.NumBlocks(), idx))
 	}
 
 	// find the relevant byte

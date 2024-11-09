@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -21,8 +22,20 @@ const (
 	UNSET = iota
 	ERROR
 	READY
-	REQUESTING
+	REQUESTING_BLOCK
+	BLOCK_COMPLETE
 )
+
+type PendingBlock struct {
+	TotalSize  uint32
+	Data       []byte
+	NextOffset uint32
+	Index      uint32
+}
+
+func (pb *PendingBlock) IsComplete() bool {
+	return pb.NextOffset == pb.TotalSize
+}
 
 type PeerHandler struct {
 	Peer       *data.BEPeer
@@ -33,8 +46,7 @@ type PeerHandler struct {
 	Incoming   chan *data.Message
 	Outgoing   chan *data.Message
 	BitField   data.BitField
-	BlockSize  uint64
-	NumBlocks  uint64
+	PendingBlock
 }
 
 func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, blockSize uint64, numBlocks uint64) *PeerHandler {
@@ -196,7 +208,7 @@ func (p *PeerHandler) RequestPiece(idx uint32) {
 	log.Printf("requesting piece %d from peer", idx)
 
 	// so we don't request a new piece until we're back to a READY state
-	p.State = REQUESTING
+	p.State = REQUESTING_BLOCK
 	p.Outgoing <- data.Request(idx, 0, 0)
 }
 
@@ -208,6 +220,34 @@ func (p *PeerHandler) send(data []byte) {
 	if bytesWritten != len(data) {
 		log.Printf("only wrote %d bytes for a message %d bytes long", bytesWritten, len(data))
 		p.State = ERROR
+	}
+}
+
+func (p *PeerHandler) receivePiece(payload []byte) {
+	// extract the relevant information
+	index := binary.BigEndian.Uint32(payload[:4])
+	begin := binary.BigEndian.Uint32(payload[4:8])
+	// 4 bytes for the index, 4 bytes for the offset
+	blockLength := len(payload) - 8
+	log.Printf("received piece for index %d from %d with length %d", index, begin, blockLength)
+
+	// copy the data into our piece buffer
+	copy(p.PendingBlock.Data[begin:], payload[8:])
+	p.PendingBlock.NextOffset = begin + uint32(blockLength)
+
+	if p.PendingBlock.IsComplete() {
+		log.Printf("block %d is complete")
+
+	} else if p.PendingBlock.NextOffset < p.PendingBlock.TotalSize {
+		// we need to request another piece
+		// at most we'll get 16KB
+		pieceLength := min(uint32(math.Pow(2, 14)), p.PendingBlock.TotalSize-p.PendingBlock.NextOffset)
+		msg := data.Request(p.PendingBlock.Index, p.PendingBlock.NextOffset, pieceLength)
+		p.Outgoing <- msg
+	} else {
+		log.Printf("downloaded more than we should have! resetting...")
+		// clean up the pending block
+		// request it again
 	}
 }
 
@@ -224,7 +264,6 @@ func (p *PeerHandler) Loop(ctx context.Context) {
 	log.Printf("lock 'n load!")
 	go p.Listen(ctx)
 
-	block := make([]byte, p.BlockSize, p.BlockSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -236,22 +275,9 @@ func (p *PeerHandler) Loop(ctx context.Context) {
 			switch msg.MessageId {
 			case data.MsgBitfield:
 				p.BitField = data.BitField{
-					NumBlocks: p.NumBlocks,
-					Field:     msg.Payload,
+					Field: msg.Payload,
 				}
 			case data.MsgPiece:
-				// extract the relevant information
-				index := binary.BigEndian.Uint32(msg.Payload[:4])
-				begin := binary.BigEndian.Uint32(msg.Payload[4:8])
-				blockLength := len(msg.Payload) - 8
-				log.Printf("received piece for index %d from %d with length %d", index, begin, blockLength)
-
-				// copy the data into our piece buffer
-				copy(block[begin:], msg.Payload[8:])
-
-				//
-				// the manager will take care of validating the block
-				// as it has access to the whole info dict
 			}
 		case msg := <-p.Outgoing:
 			log.Printf("msg to send: %x", msg.MessageId)
