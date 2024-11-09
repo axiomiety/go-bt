@@ -49,7 +49,7 @@ type PeerHandler struct {
 	PendingBlock
 }
 
-func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, blockSize uint64, numBlocks uint64) *PeerHandler {
+func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, blockSize uint64) *PeerHandler {
 	return &PeerHandler{
 		Peer:       peer,
 		PeerId:     peerId,
@@ -58,12 +58,8 @@ func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, bloc
 		State:      UNSET,
 		Incoming:   make(chan *data.Message),
 		Outgoing:   make(chan *data.Message),
-		NumBlocks:  numBlocks,
-		BlockSize:  blockSize,
 		BitField: data.BitField{
-			// we use this to check whether this was initialised upon
-			// receiving a BitField message from the peer
-			NumBlocks: 0,
+			Field: make([]byte, blockSize/8),
 		},
 	}
 }
@@ -204,12 +200,18 @@ func (p *PeerHandler) Listen(ctx context.Context) {
 	}
 }
 
-func (p *PeerHandler) RequestPiece(idx uint32) {
+func (p *PeerHandler) RequestPiece(idx uint32, pieceLength uint32) {
 	log.Printf("requesting piece %d from peer", idx)
 
 	// so we don't request a new piece until we're back to a READY state
 	p.State = REQUESTING_BLOCK
-	p.Outgoing <- data.Request(idx, 0, 0)
+	p.PendingBlock = PendingBlock{
+		// could we get this from the slice's capacity?
+		TotalSize: pieceLength,
+		Index:     idx,
+		Data:      make([]byte, 0, p.TotalSize),
+	}
+	p.Outgoing <- data.Request(idx, 0, uint32(math.Pow(2, 14)-1))
 }
 
 func (p *PeerHandler) send(data []byte) {
@@ -221,6 +223,7 @@ func (p *PeerHandler) send(data []byte) {
 		log.Printf("only wrote %d bytes for a message %d bytes long", bytesWritten, len(data))
 		p.State = ERROR
 	}
+	log.Printf("send %d bytes to peer", bytesWritten)
 }
 
 func (p *PeerHandler) receivePiece(payload []byte) {
@@ -245,9 +248,33 @@ func (p *PeerHandler) receivePiece(payload []byte) {
 		msg := data.Request(p.PendingBlock.Index, p.PendingBlock.NextOffset, pieceLength)
 		p.Outgoing <- msg
 	} else {
-		log.Printf("downloaded more than we should have! resetting...")
+		log.Printf("downloaded more than we should have! next:%d vs total:%d resetting...", p.PendingBlock.NextOffset, p.PendingBlock.TotalSize)
 		// clean up the pending block
 		// request it again
+	}
+}
+
+func (p *PeerHandler) processIncoming(msg *data.Message) {
+
+	switch msg.MessageId {
+	case data.MsgBitfield:
+		p.BitField = data.BitField{
+			Field: msg.Payload,
+		}
+		length := make([]byte, 4)
+		binary.BigEndian.PutUint32(length, 1)
+		msg := &data.Message{
+			Length:    [4]byte(length),
+			MessageId: data.MsgInterested,
+		}
+		p.Outgoing <- msg
+	case data.MsgPiece:
+		p.receivePiece(msg.Payload)
+	case data.MsgUnchoke:
+		log.Printf("unchocked!")
+		p.RequestPiece(1, 20000)
+	default:
+		log.Printf("don't know what to do with this message!")
 	}
 }
 
@@ -272,13 +299,7 @@ func (p *PeerHandler) Loop(ctx context.Context) {
 			return
 		case msg := <-p.Incoming:
 			log.Printf("msg received: %x", msg.MessageId)
-			switch msg.MessageId {
-			case data.MsgBitfield:
-				p.BitField = data.BitField{
-					Field: msg.Payload,
-				}
-			case data.MsgPiece:
-			}
+			go p.processIncoming(msg)
 		case msg := <-p.Outgoing:
 			log.Printf("msg to send: %x", msg.MessageId)
 			p.send(msg.ToBytes())

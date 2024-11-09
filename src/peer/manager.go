@@ -68,7 +68,7 @@ func (p *PeerManager) UpdatePeers() {
 				// at every iteration! c.f. the below for a more in-depth explanation
 				// https://medium.com/swlh/use-pointer-of-for-range-loop-variable-in-go-3d3481f7ffc9
 				myPeer := peer
-				handler := MakePeerHandler(&myPeer, p.PeerId, p.InfoHash)
+				handler := MakePeerHandler(&myPeer, p.PeerId, p.InfoHash, p.Torrent.Info.PieceLength)
 				p.PeerHandlers[peer.Id] = handler
 			}
 		}
@@ -183,7 +183,6 @@ func (p *PeerManager) Run() {
 			return
 		default:
 			p.refreshPeerPool(ctx)
-			p.downloadAPiece()
 		}
 		time.Sleep(5 * time.Second)
 	}

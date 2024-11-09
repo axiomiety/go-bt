@@ -81,7 +81,7 @@ func main() {
 			Port: uint32(*handshakePeerPort),
 			Id:   string(peerId),
 		}
-		ph := peer.MakePeerHandler(&bepeer, [20]byte(peerIdB), digest)
+		ph := peer.MakePeerHandler(&bepeer, [20]byte(peerIdB), digest, infoDict["piece length"].(uint64))
 		ph.Connect()
 		ph.Handshake()
 		log.Printf("peer state: %d", ph.State)

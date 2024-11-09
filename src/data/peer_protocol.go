@@ -67,8 +67,10 @@ func Request(index uint32, begin uint32, length uint32) *Message {
 	binary.BigEndian.PutUint32(buffer[0:], index)
 	binary.BigEndian.PutUint32(buffer[4:], begin)
 	binary.BigEndian.PutUint32(buffer[8:], length)
+	ll := make([]byte, 4)
+	binary.BigEndian.PutUint32(ll, 13)
 	return &Message{
-		Length:    [4]byte{0, 0, 0, 13},
+		Length:    [4]byte(ll),
 		MessageId: MsgRequest,
 		Payload:   buffer,
 	}
