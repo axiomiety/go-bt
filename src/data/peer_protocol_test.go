@@ -49,3 +49,17 @@ func TestBitField(t *testing.T) {
 		}
 	}
 }
+
+func TestReques(t *testing.T) {
+	msg := Request(1, 2, 3)
+	expected := []byte{
+		0, 0, 0, 13,
+		6,
+		0, 0, 0, 1,
+		0, 0, 0, 2,
+		0, 0, 0, 3,
+	}
+	if !bytes.Equal(msg.ToBytes(), expected) {
+		t.Errorf("exepected %v but got %v", expected, msg.ToBytes())
+	}
+}

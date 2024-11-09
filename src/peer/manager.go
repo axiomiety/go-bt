@@ -134,19 +134,26 @@ func (p *PeerManager) refreshPeerPool(ctx context.Context) {
 	}
 }
 
-func (p *PeerManager) selectPieceToDownload() uint64 {
-	return 0
-}
+// func (p *PeerManager) downloadAPiece() string {
 
-func (p *PeerManager) assignPieceToPeer(idx uint64) string {
-	// iterate through each peer to see if they have the piece in question
-	for _, peer := range p.PeerHandlers {
-		if peer.State == READY && peer.BitField.HasBlock(idx) {
-			peer.DownloadPiece(idx)
-			return peer.Peer.Id
-		}
-	}
-}
+// 	// first let's find a piece we need, and that's not currently being downloaded
+
+// 	// next, find a peer that has the required piece
+
+// 	// if we find none, the only thing we can do is wait
+// 	// maybe a new peer will show up via the tracker
+// 	// or an existing peer will sent a Have message for that piece
+// 	// in the meantime let's try to find another piece we can download
+
+// 	// iterate through each peer to see if they have the piece in question
+// 	var uint64 pieceIdx := 0
+// 	for _, peer := range p.PeerHandlers {
+// 		if peer.State == READY && peer.BitField.HasBlock(pieceIdx) {
+// 			peer.DownloadPiece(pieceIdx)
+// 			return peer.Peer.Id
+// 		}
+// 	}
+// }
 
 func (p *PeerManager) Run() {
 	log.Printf("peerManager ID (ours): %s", hex.EncodeToString(p.PeerId[:]))
@@ -176,8 +183,7 @@ func (p *PeerManager) Run() {
 			return
 		default:
 			p.refreshPeerPool(ctx)
-			pieceIdx := p.selectPieceToDownload()
-			p.assignPieceToPeer(pieceIdx)
+			p.downloadAPiece()
 		}
 		time.Sleep(5 * time.Second)
 	}

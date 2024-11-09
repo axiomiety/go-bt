@@ -2,6 +2,7 @@ package data
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 )
 
@@ -58,6 +59,18 @@ func KeepAlive() *Message {
 func Choke() *Message {
 	return &Message{
 		Length: [4]byte{0, 0, 0, 1},
+	}
+}
+
+func Request(index uint32, begin uint32, length uint32) *Message {
+	buffer := make([]byte, 4*3)
+	binary.BigEndian.PutUint32(buffer[0:], index)
+	binary.BigEndian.PutUint32(buffer[4:], begin)
+	binary.BigEndian.PutUint32(buffer[8:], length)
+	return &Message{
+		Length:    [4]byte{0, 0, 0, 13},
+		MessageId: MsgRequest,
+		Payload:   buffer,
 	}
 }
 

@@ -21,6 +21,7 @@ const (
 	UNSET = iota
 	ERROR
 	READY
+	REQUESTING
 )
 
 type PeerHandler struct {
@@ -32,9 +33,11 @@ type PeerHandler struct {
 	Incoming   chan *data.Message
 	Outgoing   chan *data.Message
 	BitField   data.BitField
+	BlockSize  uint64
+	NumBlocks  uint64
 }
 
-func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte) *PeerHandler {
+func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, blockSize uint64, numBlocks uint64) *PeerHandler {
 	return &PeerHandler{
 		Peer:       peer,
 		PeerId:     peerId,
@@ -43,6 +46,13 @@ func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte) *Pee
 		State:      UNSET,
 		Incoming:   make(chan *data.Message),
 		Outgoing:   make(chan *data.Message),
+		NumBlocks:  numBlocks,
+		BlockSize:  blockSize,
+		BitField: data.BitField{
+			// we use this to check whether this was initialised upon
+			// receiving a BitField message from the peer
+			NumBlocks: 0,
+		},
 	}
 }
 
@@ -182,6 +192,25 @@ func (p *PeerHandler) Listen(ctx context.Context) {
 	}
 }
 
+func (p *PeerHandler) RequestPiece(idx uint32) {
+	log.Printf("requesting piece %d from peer", idx)
+
+	// so we don't request a new piece until we're back to a READY state
+	p.State = REQUESTING
+	p.Outgoing <- data.Request(idx, 0, 0)
+}
+
+func (p *PeerHandler) send(data []byte) {
+	bytesWritten, err := p.Connection.Write(data)
+	if err != nil {
+		log.Printf("error writing to peer! %s", err)
+	}
+	if bytesWritten != len(data) {
+		log.Printf("only wrote %d bytes for a message %d bytes long", bytesWritten, len(data))
+		p.State = ERROR
+	}
+}
+
 func (p *PeerHandler) Loop(ctx context.Context) {
 	p.Connect()
 	if p.State == ERROR {
@@ -194,6 +223,8 @@ func (p *PeerHandler) Loop(ctx context.Context) {
 	}
 	log.Printf("lock 'n load!")
 	go p.Listen(ctx)
+
+	block := make([]byte, p.BlockSize, p.BlockSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -202,9 +233,29 @@ func (p *PeerHandler) Loop(ctx context.Context) {
 			return
 		case msg := <-p.Incoming:
 			log.Printf("msg received: %x", msg.MessageId)
-			log.Printf("payload: %v", msg.Payload)
+			switch msg.MessageId {
+			case data.MsgBitfield:
+				p.BitField = data.BitField{
+					NumBlocks: p.NumBlocks,
+					Field:     msg.Payload,
+				}
+			case data.MsgPiece:
+				// extract the relevant information
+				index := binary.BigEndian.Uint32(msg.Payload[:4])
+				begin := binary.BigEndian.Uint32(msg.Payload[4:8])
+				blockLength := len(msg.Payload) - 8
+				log.Printf("received piece for index %d from %d with length %d", index, begin, blockLength)
+
+				// copy the data into our piece buffer
+				copy(block[begin:], msg.Payload[8:])
+
+				//
+				// the manager will take care of validating the block
+				// as it has access to the whole info dict
+			}
 		case msg := <-p.Outgoing:
 			log.Printf("msg to send: %x", msg.MessageId)
+			p.send(msg.ToBytes())
 		}
 	}
 }
