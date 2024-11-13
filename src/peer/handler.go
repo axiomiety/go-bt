@@ -3,6 +3,7 @@ package peer
 import (
 	"axiomiety/go-bt/data"
 	"context"
+	"crypto/sha1"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -209,9 +210,12 @@ func (p *PeerHandler) RequestPiece(idx uint32, pieceLength uint32) {
 		// could we get this from the slice's capacity?
 		TotalSize: pieceLength,
 		Index:     idx,
-		Data:      make([]byte, 0, p.TotalSize),
 	}
-	p.Outgoing <- data.Request(idx, 0, uint32(math.Pow(2, 14)-1))
+	// can't set it above otherwise when it gets copied, the capacity is zero!
+	p.Data = make([]byte, p.TotalSize)
+	// the first packet is tricky!
+	amountOfDataToRequest := min(p.TotalSize, uint32(math.Pow(2, 14)-1))
+	p.Outgoing <- data.Request(idx, 0, amountOfDataToRequest)
 }
 
 func (p *PeerHandler) send(data []byte) {
@@ -226,21 +230,24 @@ func (p *PeerHandler) send(data []byte) {
 	log.Printf("send %d bytes to peer", bytesWritten)
 }
 
-func (p *PeerHandler) receivePiece(payload []byte) {
+func (p *PeerHandler) receiveBlock(payload []byte) {
 	// extract the relevant information
 	index := binary.BigEndian.Uint32(payload[:4])
 	begin := binary.BigEndian.Uint32(payload[4:8])
 	// 4 bytes for the index, 4 bytes for the offset
 	blockLength := len(payload) - 8
-	log.Printf("received piece for index %d from %d with length %d", index, begin, blockLength)
+	log.Printf("received block for index %d from %d with length %d", index, begin, blockLength)
 
 	// copy the data into our piece buffer
-	copy(p.PendingBlock.Data[begin:], payload[8:])
+	copy(p.PendingBlock.Data[begin:begin+uint32(blockLength)], payload[8:])
 	p.PendingBlock.NextOffset = begin + uint32(blockLength)
 
 	if p.PendingBlock.IsComplete() {
-		log.Printf("block %d is complete")
-
+		log.Printf("block %d is complete", p.PendingBlock.Index)
+		// sha1 validation!
+		h := sha1.New()
+		h.Write(p.PendingBlock.Data)
+		log.Printf("hash: %s", hex.EncodeToString(h.Sum(nil)))
 	} else if p.PendingBlock.NextOffset < p.PendingBlock.TotalSize {
 		// we need to request another piece
 		// at most we'll get 16KB
@@ -250,7 +257,7 @@ func (p *PeerHandler) receivePiece(payload []byte) {
 	} else {
 		log.Printf("downloaded more than we should have! next:%d vs total:%d resetting...", p.PendingBlock.NextOffset, p.PendingBlock.TotalSize)
 		// clean up the pending block
-		// request it again
+		// request it again ?
 	}
 }
 
@@ -269,10 +276,13 @@ func (p *PeerHandler) processIncoming(msg *data.Message) {
 		}
 		p.Outgoing <- msg
 	case data.MsgPiece:
-		p.receivePiece(msg.Payload)
+		p.receiveBlock(msg.Payload)
 	case data.MsgUnchoke:
 		log.Printf("unchocked!")
-		p.RequestPiece(1, 20000)
+		// so this works!
+		// p.RequestPiece(1, 65536)
+		// last piece!
+		p.RequestPiece(183, 6912)
 	default:
 		log.Printf("don't know what to do with this message!")
 	}

@@ -65,6 +65,9 @@ func main() {
 	case "download":
 		downloadCmd.Parse(os.Args[2:])
 		manager := peer.FromTorrentFile(*downloadTorrentFile)
+		obj := bencode.GetDictFromFile(downloadTorrentFile)
+		infoDict := obj["info"].(map[string]any)
+		log.Printf("hash of idx 183: %s", hex.EncodeToString([]byte(infoDict["pieces"].(string)[20*183:])))
 		manager.Run()
 		log.Printf("manager has shut down")
 	case "handshake":
