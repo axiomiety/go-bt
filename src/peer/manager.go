@@ -155,18 +155,24 @@ func (p *PeerManager) refreshPeerPool(ctx context.Context) {
 // 	}
 // }
 
+func kickOff(peer *PeerHandler, ctx context.Context) {
+	// go peer.Loop(ctx)
+	for peer.State != READY {
+		time.Sleep(1 * time.Second)
+	}
+	go peer.Interested()
+	for peer.State != UNCHOKED {
+		time.Sleep(1 * time.Second)
+	}
+	go peer.RequestPiece(0, 65536)
+}
+
 func (p *PeerManager) Run() {
 	log.Printf("peerManager ID (ours): %s", hex.EncodeToString(p.PeerId[:]))
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer func() {
 		cancelFunc()
 	}()
-	for _, peer := range p.PeerHandlers {
-		if peer.State == UNSET {
-			// eventually this will need to go into a goroutine
-			go peer.Loop(ctx)
-		}
-	}
 
 	// periodic ping to the tracker to ensure we still show up
 	// as a valid peer
@@ -183,6 +189,14 @@ func (p *PeerManager) Run() {
 			return
 		default:
 			p.refreshPeerPool(ctx)
+			for _, peer := range p.PeerHandlers {
+				if peer.State == UNSET {
+					// eventually this will need to go into a goroutine
+					go kickOff(peer, ctx)
+					time.Sleep(30 * time.Second)
+				}
+				break
+			}
 		}
 		time.Sleep(5 * time.Second)
 	}

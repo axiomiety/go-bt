@@ -23,6 +23,7 @@ const (
 	UNSET = iota
 	ERROR
 	READY
+	UNCHOKED
 	REQUESTING_BLOCK
 	BLOCK_COMPLETE
 )
@@ -268,24 +269,24 @@ func (p *PeerHandler) processIncoming(msg *data.Message) {
 		p.BitField = data.BitField{
 			Field: msg.Payload,
 		}
-		length := make([]byte, 4)
-		binary.BigEndian.PutUint32(length, 1)
-		msg := &data.Message{
-			Length:    [4]byte(length),
-			MessageId: data.MsgInterested,
-		}
-		p.Outgoing <- msg
 	case data.MsgPiece:
 		p.receiveBlock(msg.Payload)
 	case data.MsgUnchoke:
 		log.Printf("unchocked!")
-		// so this works!
-		// p.RequestPiece(1, 65536)
-		// last piece!
-		p.RequestPiece(183, 6912)
+		p.State = UNCHOKED
 	default:
 		log.Printf("don't know what to do with this message!")
 	}
+}
+
+func (p *PeerHandler) Interested() {
+	length := make([]byte, 4)
+	binary.BigEndian.PutUint32(length, 1)
+	msg := &data.Message{
+		Length:    [4]byte(length),
+		MessageId: data.MsgInterested,
+	}
+	p.Outgoing <- msg
 }
 
 func (p *PeerHandler) Loop(ctx context.Context) {
@@ -301,6 +302,7 @@ func (p *PeerHandler) Loop(ctx context.Context) {
 	log.Printf("lock 'n load!")
 	go p.Listen(ctx)
 
+	// TODO: check our internal state after each message!
 	for {
 		select {
 		case <-ctx.Done():
