@@ -6,6 +6,7 @@ import (
 	"axiomiety/go-bt/torrent"
 	"encoding/hex"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -19,4 +20,24 @@ func TestInfoHash(t *testing.T) {
 	if infoDigest != expectedDigest {
 		t.Errorf("expected %s, got %s", expectedDigest, infoDigest)
 	}
+}
+
+func TestGetSegmentsForPiece(t *testing.T) {
+	file, _ := os.Open("../bencode/testdata/files.torrent")
+	defer file.Close()
+	btorrent := bencode.ParseFromReader[data.BETorrent](file)
+	binfo := btorrent.Info
+
+	segments := torrent.GetSegmentsForPiece(&binfo, 0)
+	expected := []torrent.Segment{
+		{
+			Filename: "/tmp/files/file1",
+			Offset:   uint64(0),
+			Length:   binfo.PieceLength,
+		},
+	}
+	if !reflect.DeepEqual(segments, expected) {
+		t.Errorf("expected %+v, got %+v ", expected, segments)
+	}
+
 }

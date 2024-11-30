@@ -16,3 +16,44 @@ func CalculateInfoHashFromInfoDict(info map[string]any) [20]byte {
 	bencode.Encode(&buf, info)
 	return sha1.Sum(buf.Bytes())
 }
+
+type Segment struct {
+	Filename string
+	Offset   uint64
+	Length   uint64
+}
+
+func GetSegmentsForPiece(i *data.BEInfo, index uint64) []Segment {
+	// 2 is a safe bet - most of the time we'll either return a single segment
+	// or one straddling 2 files - only if files are very small will we
+	// start returning more than 2
+	segments := make([]Segment, 0)
+
+	pieceStart := index * i.PieceLength
+	pieceRemaining := i.PieceLength
+	runningOffset := uint64(0)
+	for _, file := range i.Files {
+		if pieceRemaining == 0 || runningOffset > pieceStart+pieceRemaining {
+			// we're done
+			break
+		} else if (runningOffset + uint64(file.Length)) < pieceStart {
+			// fmt.Printf("boo - %d %d %d\n", runningOffset, file.Length, pieceStart)
+			// this is beyond the current file's boundary
+			runningOffset += uint64(file.Length)
+		} else {
+			// fmt.Printf("goat - %v %d %d %d\n", file.Path[0], runningOffset, file.Length, pieceStart)
+			// part of this piece belongs to this file
+			fileBytesInPiece := min(runningOffset+uint64(file.Length)-pieceStart, i.PieceLength)
+			segments = append(segments, Segment{
+				Filename: file.Path[0],
+				Offset:   pieceStart,
+				Length:   fileBytesInPiece,
+			})
+			// this may well be 0!
+			pieceRemaining -= fileBytesInPiece
+			pieceStart += fileBytesInPiece
+			runningOffset += fileBytesInPiece
+		}
+	}
+	return segments
+}
