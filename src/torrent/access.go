@@ -37,22 +37,22 @@ func GetSegmentsForPiece(i *data.BEInfo, index uint64) []Segment {
 			// we're done
 			break
 		} else if (runningOffset + uint64(file.Length)) < pieceStart {
-			// fmt.Printf("boo - %d %d %d\n", runningOffset, file.Length, pieceStart)
 			// this is beyond the current file's boundary
 			runningOffset += uint64(file.Length)
 		} else {
-			// fmt.Printf("goat - %v %d %d %d\n", file.Path[0], runningOffset, file.Length, pieceStart)
 			// part of this piece belongs to this file
-			fileBytesInPiece := min(runningOffset+uint64(file.Length)-pieceStart, i.PieceLength)
+			fileBytesInPiece := min(runningOffset+uint64(file.Length)-pieceStart, pieceRemaining)
 			segments = append(segments, Segment{
 				Filename: file.Path[0],
-				Offset:   pieceStart,
+				Offset:   pieceStart - runningOffset,
 				Length:   fileBytesInPiece,
 			})
-			// this may well be 0!
+			// this may well be 0 now
 			pieceRemaining -= fileBytesInPiece
 			pieceStart += fileBytesInPiece
-			runningOffset += fileBytesInPiece
+			if pieceStart == (runningOffset + uint64(file.Length)) {
+				runningOffset += uint64(file.Length)
+			}
 		}
 	}
 	return segments
