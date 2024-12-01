@@ -5,7 +5,6 @@ import (
 	"axiomiety/go-bt/data"
 	"axiomiety/go-bt/torrent"
 	"encoding/hex"
-	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -24,52 +23,61 @@ func TestInfoHash(t *testing.T) {
 }
 
 func TestGetSegmentsForPiece(t *testing.T) {
-	file, _ := os.Open("../bencode/testdata/files.torrent")
-	defer file.Close()
-	btorrent := bencode.ParseFromReader[data.BETorrent](file)
-	binfo := btorrent.Info
+	// total size is 23 bytes for a total of 3 pieces
+	binfo := &data.BEInfo{
+		Files: []data.BEFile{
+			{
+				Path:   []string{"file1"},
+				Length: 12,
+			},
+			{
+				Path:   []string{"file2"},
+				Length: 4,
+			},
+			{
+				Path:   []string{"file3"},
+				Length: 7,
+			},
+		},
+		PieceLength: 10,
+	}
 
-	// first piece
-	segments := torrent.GetSegmentsForPiece(&binfo, 0)
-	expected := []torrent.Segment{
-		{
-			Filename: "/tmp/files/file1",
-			Offset:   uint64(0),
-			Length:   binfo.PieceLength,
-		},
-	}
-	if !reflect.DeepEqual(segments, expected) {
-		t.Errorf("expected %+v, got %+v ", expected, segments)
+	expected := map[int][]torrent.Segment{
+		0: {
+			{
+				Filename: "file1",
+				Offset:   uint64(0),
+				Length:   10,
+			}},
+		// this is the most interesting piece - it spans 3 files!
+		1: {
+			{
+				Filename: "file1",
+				Offset:   uint64(10),
+				Length:   2,
+			},
+			{
+				Filename: "file2",
+				Offset:   uint64(0),
+				Length:   4,
+			},
+			{
+				Filename: "file3",
+				Offset:   uint64(0),
+				Length:   4,
+			}},
+		2: {
+			{
+				Filename: "file3",
+				Offset:   uint64(4),
+				Length:   3,
+			}},
 	}
 
-	// last piece
-	segments = torrent.GetSegmentsForPiece(&binfo, 183)
-	expected = []torrent.Segment{
-		{
-			Filename: "/tmp/files/file3",
-			Offset:   uint64(2993088),
-			Length:   6912,
-		},
-	}
-	if !reflect.DeepEqual(segments, expected) {
-		t.Errorf("expected %+v, got %+v ", expected, segments)
-	}
-	fmt.Print("\n\n\n")
-	// boundary piece
-	segments = torrent.GetSegmentsForPiece(&binfo, 106)
-	expected = []torrent.Segment{
-		{
-			Filename: "/tmp/files/file1",
-			Offset:   uint64(6946816),
-			Length:   53184,
-		},
-		{
-			Filename: "/tmp/files/file2",
-			Offset:   uint64(0),
-			Length:   12352,
-		},
-	}
-	if !reflect.DeepEqual(segments, expected) {
-		t.Errorf("expected %+v, got %+v ", expected, segments)
+	for pieceIdx, expectedSegments := range expected {
+		segments := torrent.GetSegmentsForPiece(binfo, uint64(pieceIdx))
+		if !reflect.DeepEqual(segments, expectedSegments) {
+			t.Errorf("expected %+v, got %+v ", expectedSegments, segments)
+		}
 	}
 }
