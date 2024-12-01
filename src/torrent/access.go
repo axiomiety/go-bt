@@ -24,9 +24,6 @@ type Segment struct {
 }
 
 func GetSegmentsForPiece(i *data.BEInfo, index uint64) []Segment {
-	// 2 is a safe bet - most of the time we'll either return a single segment
-	// or one straddling 2 files - only if files are very small will we
-	// start returning more than 2
 	segments := make([]Segment, 0)
 
 	pieceStart := index * i.PieceLength
