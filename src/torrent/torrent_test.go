@@ -5,7 +5,9 @@ import (
 	"axiomiety/go-bt/data"
 	"axiomiety/go-bt/torrent"
 	"encoding/hex"
+	"io"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 )
@@ -78,6 +80,57 @@ func TestGetSegmentsForPiece(t *testing.T) {
 		segments := torrent.GetSegmentsForPiece(binfo, uint64(pieceIdx))
 		if !reflect.DeepEqual(segments, expectedSegments) {
 			t.Errorf("expected %+v, got %+v ", expectedSegments, segments)
+		}
+	}
+}
+
+func TestWriteSegments(t *testing.T) {
+	segments := []torrent.Segment{
+
+		{
+			Filename: "file1",
+			// we start writing from the 3rd byte onwards
+			Offset: uint64(2),
+			Length: 2,
+		},
+		{
+			Filename: "file2",
+			Offset:   uint64(0),
+			Length:   4,
+		},
+		{
+			Filename: "file3",
+			Offset:   uint64(0),
+			Length:   4,
+		},
+	}
+
+	// this has to contain contents - in full - of each file
+	data := []byte{
+		0, 0, 'x', 'o',
+		'd', 'e', 'a', 'd',
+		'b', 'e', 'e', 'f',
+	}
+
+	expected := map[string][]byte{
+		"file1": data[:4],
+		"file2": data[4:8],
+		"file3": data[8:],
+	}
+	baseDir := t.TempDir()
+	// we start from offset 2 for file1
+	torrent.WriteSegments(segments, data[2:], baseDir)
+
+	for fname, contents := range expected {
+		file, _ := os.Open(path.Join(baseDir, fname))
+		buffer := make([]byte, len(contents))
+		numBytesRead, _ := io.ReadFull(file, buffer)
+		file.Close()
+		if numBytesRead != len(contents) {
+			t.Errorf("read %d bytes, expected %d", numBytesRead, len(contents))
+		}
+		if !reflect.DeepEqual(contents, buffer) {
+			t.Errorf("expected %+v, got %+v for %s", contents, buffer, fname)
 		}
 	}
 }
