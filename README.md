@@ -1,5 +1,5 @@
 # go-bt
-A small BitTorrent client using solely the standard library
+A small BitTorrent client using solely the standard library. Uses features that were first introduced in 1.22.
 
 # Usage
 

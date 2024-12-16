@@ -27,14 +27,14 @@ func TestBitField(t *testing.T) {
 	}
 	blocksPresent := []uint32{0, 1, 2, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 21}
 	for _, idx := range blocksPresent {
-		if !b.HasBlock(idx) {
+		if !b.HasPiece(idx) {
 			t.Errorf("We should have block %d", idx)
 		}
 
 	}
 	blocksMissing := []uint32{3, 8, 16, 17, 18, 19, 20}
 	for _, idx := range blocksMissing {
-		if b.HasBlock(idx) {
+		if b.HasPiece(idx) {
 			t.Errorf("We should *not* have block %d", idx)
 		}
 
@@ -42,8 +42,8 @@ func TestBitField(t *testing.T) {
 
 	// now for updates
 	for _, idx := range blocksMissing {
-		b.SetBlock(idx)
-		if !b.HasBlock(3) {
+		b.SetPiece(idx)
+		if !b.HasPiece(3) {
 			t.Errorf("Tried to set block %d but it is still reported as missing", idx)
 		}
 	}

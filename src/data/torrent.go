@@ -19,3 +19,31 @@ type BEFile struct {
 	Path   []string `bencode:"path"`
 	Length int      `bencode:"length"`
 }
+
+func (i *BEInfo) GetPieceSize(idx uint64) uint64 {
+	numPieces := i.GetNumPieces()
+	if idx == numPieces-1 {
+		return min(i.PieceLength, i.GetTotalLength()%i.PieceLength)
+	} else {
+		return i.PieceLength
+	}
+}
+
+func (i *BEInfo) GetTotalLength() uint64 {
+	totalLength := i.Length
+	if len(i.Files) > 0 {
+		for _, file := range i.Files {
+			totalLength += uint64(file.Length)
+		}
+	}
+	return totalLength
+}
+
+func (i *BEInfo) GetNumPieces() uint64 {
+	totalLength := i.GetTotalLength()
+	numPieces := totalLength / i.PieceLength
+	if totalLength%i.PieceLength > 0 {
+		numPieces += 1
+	}
+	return numPieces
+}

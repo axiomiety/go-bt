@@ -80,14 +80,14 @@ type BitField struct {
 	Field []byte
 }
 
-func (b *BitField) NumBlocks() uint32 {
+func (b *BitField) NumPieces() uint32 {
 	// each byte represents 8 blocks
 	return uint32(cap(b.Field) * 8)
 }
 
-func (b *BitField) HasBlock(idx uint32) bool {
-	if idx > b.NumBlocks() {
-		panic(fmt.Sprintf("We only have %d blocks but requested block number %d", b.NumBlocks(), idx))
+func (b *BitField) HasPiece(idx uint32) bool {
+	if idx > b.NumPieces() {
+		panic(fmt.Sprintf("We only have %d blocks but requested block number %d", b.NumPieces(), idx))
 	}
 
 	// find the relevant byte
@@ -97,9 +97,9 @@ func (b *BitField) HasBlock(idx uint32) bool {
 	return b.Field[byteIdx]&offset > 0
 }
 
-func (b *BitField) SetBlock(idx uint32) {
-	if idx > b.NumBlocks() {
-		panic(fmt.Sprintf("We only have %d blocks but tried to set block number %d", b.NumBlocks(), idx))
+func (b *BitField) SetPiece(idx uint32) {
+	if idx > b.NumPieces() {
+		panic(fmt.Sprintf("We only have %d blocks but tried to set block number %d", b.NumPieces(), idx))
 	}
 
 	// find the relevant byte

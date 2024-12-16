@@ -28,14 +28,17 @@ const (
 	BLOCK_COMPLETE
 )
 
-type PendingBlock struct {
+// 2^14-1
+const PIECE_LENGTH = uint32(16383)
+
+type PendingPiece struct {
 	TotalSize  uint32
 	Data       []byte
 	NextOffset uint32
 	Index      uint32
 }
 
-func (pb *PendingBlock) IsComplete() bool {
+func (pb *PendingPiece) IsComplete() bool {
 	return pb.NextOffset == pb.TotalSize
 }
 
@@ -48,7 +51,7 @@ type PeerHandler struct {
 	Incoming   chan *data.Message
 	Outgoing   chan *data.Message
 	BitField   data.BitField
-	PendingBlock
+	PendingPiece
 }
 
 func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, blockSize uint64) *PeerHandler {
@@ -207,7 +210,7 @@ func (p *PeerHandler) RequestPiece(idx uint32, pieceLength uint32) {
 
 	// so we don't request a new piece until we're back to a READY state
 	p.State = REQUESTING_BLOCK
-	p.PendingBlock = PendingBlock{
+	p.PendingPiece = PendingPiece{
 		// could we get this from the slice's capacity?
 		TotalSize: pieceLength,
 		Index:     idx,
@@ -215,7 +218,7 @@ func (p *PeerHandler) RequestPiece(idx uint32, pieceLength uint32) {
 	// can't set it above otherwise when it gets copied, the capacity is zero!
 	p.Data = make([]byte, p.TotalSize)
 	// the first packet is tricky!
-	amountOfDataToRequest := min(p.TotalSize, uint32(math.Pow(2, 14)-1))
+	amountOfDataToRequest := min(p.TotalSize, PIECE_LENGTH)
 	p.Outgoing <- data.Request(idx, 0, amountOfDataToRequest)
 }
 
@@ -240,23 +243,23 @@ func (p *PeerHandler) receiveBlock(payload []byte) {
 	log.Printf("received block for index %d from %d with length %d", index, begin, blockLength)
 
 	// copy the data into our piece buffer
-	copy(p.PendingBlock.Data[begin:begin+uint32(blockLength)], payload[8:])
-	p.PendingBlock.NextOffset = begin + uint32(blockLength)
+	copy(p.PendingPiece.Data[begin:begin+uint32(blockLength)], payload[8:])
+	p.PendingPiece.NextOffset = begin + uint32(blockLength)
 
-	if p.PendingBlock.IsComplete() {
-		log.Printf("block %d is complete", p.PendingBlock.Index)
+	if p.PendingPiece.IsComplete() {
+		log.Printf("piece %d is complete", p.PendingPiece.Index)
 		// sha1 validation!
 		h := sha1.New()
-		h.Write(p.PendingBlock.Data)
+		h.Write(p.PendingPiece.Data)
 		log.Printf("hash: %s", hex.EncodeToString(h.Sum(nil)))
-	} else if p.PendingBlock.NextOffset < p.PendingBlock.TotalSize {
+	} else if p.PendingPiece.NextOffset < p.PendingPiece.TotalSize {
 		// we need to request another piece
 		// at most we'll get 16KB
-		pieceLength := min(uint32(math.Pow(2, 14)), p.PendingBlock.TotalSize-p.PendingBlock.NextOffset)
-		msg := data.Request(p.PendingBlock.Index, p.PendingBlock.NextOffset, pieceLength)
+		pieceLength := min(uint32(math.Pow(2, 14)), p.PendingPiece.TotalSize-p.PendingPiece.NextOffset)
+		msg := data.Request(p.PendingPiece.Index, p.PendingPiece.NextOffset, pieceLength)
 		p.Outgoing <- msg
 	} else {
-		log.Printf("downloaded more than we should have! next:%d vs total:%d resetting...", p.PendingBlock.NextOffset, p.PendingBlock.TotalSize)
+		log.Printf("downloaded more than we should have! next:%d vs total:%d resetting...", p.PendingPiece.NextOffset, p.PendingPiece.TotalSize)
 		// clean up the pending block
 		// request it again ?
 	}

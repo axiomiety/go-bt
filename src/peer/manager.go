@@ -148,12 +148,28 @@ func (p *PeerManager) refreshPeerPool(ctx context.Context) {
 // 	// iterate through each peer to see if they have the piece in question
 // 	var uint64 pieceIdx := 0
 // 	for _, peer := range p.PeerHandlers {
-// 		if peer.State == READY && peer.BitField.HasBlock(pieceIdx) {
+// 		if peer.State == READY && peer.BitField.HasPiece(pieceIdx) {
 // 			peer.DownloadPiece(pieceIdx)
 // 			return peer.Peer.Id
 // 		}
 // 	}
 // }
+
+func DownloadNextPiece(p *PeerManager) {
+	for blockNum := range p.BitFied.NumPieces() {
+		for peerId, handler := range p.PeerHandlers {
+			if handler.State == READY && handler.BitField.HasPiece(blockNum) {
+				// we found a peer!
+				log.Printf("peer %x is READY and has block %d", peerId, blockNum)
+				blockSize := uint32(0)
+				// usually we'd request PIECE_LENGTH, but if this is e.g. the last
+				// block, the size of the block may be less than the maximum
+				// size of a piece
+				handler.RequestPiece(blockNum, min(blockSize, PIECE_LENGTH))
+			}
+		}
+	}
+}
 
 func kickOff(peer *PeerHandler, ctx context.Context) {
 	// go peer.Loop(ctx)
