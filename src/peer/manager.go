@@ -28,7 +28,7 @@ type PeerManager struct {
 	Context         context.Context
 	PeerId          [20]byte
 	TrackerURL      url.URL
-	BitFied         data.BitField
+	BitField        data.BitField
 }
 
 func (p *PeerManager) QueryTracker() {
@@ -134,40 +134,78 @@ func (p *PeerManager) refreshPeerPool(ctx context.Context) {
 	}
 }
 
-// func (p *PeerManager) downloadAPiece() string {
-
-// 	// first let's find a piece we need, and that's not currently being downloaded
-
-// 	// next, find a peer that has the required piece
-
-// 	// if we find none, the only thing we can do is wait
-// 	// maybe a new peer will show up via the tracker
-// 	// or an existing peer will sent a Have message for that piece
-// 	// in the meantime let's try to find another piece we can download
-
-// 	// iterate through each peer to see if they have the piece in question
-// 	var uint64 pieceIdx := 0
-// 	for _, peer := range p.PeerHandlers {
-// 		if peer.State == READY && peer.BitField.HasPiece(pieceIdx) {
-// 			peer.DownloadPiece(pieceIdx)
-// 			return peer.Peer.Id
-// 		}
-// 	}
-// }
-
-func DownloadNextPiece(p *PeerManager) {
-	for blockNum := range p.BitFied.NumPieces() {
-		for peerId, handler := range p.PeerHandlers {
-			if handler.State == READY && handler.BitField.HasPiece(blockNum) {
-				// we found a peer!
-				log.Printf("peer %x is READY and has block %d", peerId, blockNum)
-				blockSize := uint32(0)
-				// usually we'd request PIECE_LENGTH, but if this is e.g. the last
-				// block, the size of the block may be less than the maximum
-				// size of a piece
-				handler.RequestPiece(blockNum, min(blockSize, PIECE_LENGTH))
+func (p *PeerManager) DownloadNextPiece() bool {
+	didAnything := false
+	for pieceNum := range p.BitField.NumPieces() {
+		if !p.BitField.HasPiece(pieceNum) {
+			for peerId, handler := range p.PeerHandlers {
+				if handler.State == UNCHOKED && handler.BitField.HasPiece(pieceNum) {
+					log.Printf("peer %x is UNCHOKED and has piece %d", peerId, pieceNum)
+					// usually we'd request PIECE_LENGTH, but if this is e.g. the last
+					// piece, the size of the piece may be less than the piece size
+					// specified in the info dict
+					handler.RequestPiece(pieceNum, min(p.Torrent.Info.GetPieceSize(pieceNum), PIECE_LENGTH))
+					didAnything = true
+				}
 			}
 		}
+	}
+	return didAnything
+}
+
+func (p *PeerManager) PeerHasPieceOfInterest(h *PeerHandler) bool {
+	// a peer has a piece of interest if we don't already have it
+	for idx := range p.BitField.NumPieces() {
+		if !p.BitField.HasPiece(idx) && h.BitField.HasPiece(idx) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *PeerManager) GetPiecesAvailability() map[uint32]uint32 {
+	availability := map[uint32]uint32{}
+	for idx := range p.BitField.NumPieces() {
+		if !p.BitField.HasPiece(idx) {
+			availability[idx] = 0
+			for _, peerHandler := range p.PeerHandlers {
+				if peerHandler.BitField.HasPiece(idx) {
+					availability[idx] += 1
+				}
+			}
+		}
+	}
+	return availability
+}
+
+func GetPiecesScore(b data.BitField, availability map[uint32]uint32, numPeers uint32) uint32 {
+	score := uint32(0)
+	for pieceIdx, numPeersWithPiece := range availability {
+		if b.HasPiece(pieceIdx) {
+			score += 1 + numPeers - numPeersWithPiece
+		}
+	}
+	return score
+}
+
+func (p *PeerManager) GetPeerScore(availability map[uint32]uint32, h *PeerHandler) int {
+	// not yet unchocked!
+	if p.PeerHasPieceOfInterest(h) {
+		score := GetPiecesScore(h.BitField, availability, len(p.PeerHandlers))
+		if h.State == READY {
+			// we're chocked - halve the score
+			return score / 2
+		} else {
+			return score
+		}
+	} else if h.State == READY {
+		// the peer has choked us and it doesn't have
+		// any piece of interest
+		return 0
+	} else {
+		// peer is unchocked but it doesn't currently have
+		// any piece we're interested in
+		return 1
 	}
 }
 

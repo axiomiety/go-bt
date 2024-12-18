@@ -24,8 +24,8 @@ const (
 	ERROR
 	READY
 	UNCHOKED
-	REQUESTING_BLOCK
-	BLOCK_COMPLETE
+	REQUESTING_PIECE
+	PIECE_COMPLETE
 )
 
 // 2^14-1
@@ -54,7 +54,7 @@ type PeerHandler struct {
 	PendingPiece
 }
 
-func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, blockSize uint64) *PeerHandler {
+func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, blockSize uint32) *PeerHandler {
 	return &PeerHandler{
 		Peer:       peer,
 		PeerId:     peerId,
@@ -209,7 +209,7 @@ func (p *PeerHandler) RequestPiece(idx uint32, pieceLength uint32) {
 	log.Printf("requesting piece %d from peer", idx)
 
 	// so we don't request a new piece until we're back to a READY state
-	p.State = REQUESTING_BLOCK
+	p.State = REQUESTING_PIECE
 	p.PendingPiece = PendingPiece{
 		// could we get this from the slice's capacity?
 		TotalSize: pieceLength,

@@ -48,36 +48,36 @@ func TestGetSegmentsForPiece(t *testing.T) {
 		0: {
 			{
 				Filename: "file1",
-				Offset:   uint64(0),
+				Offset:   uint32(0),
 				Length:   10,
 			}},
 		// this is the most interesting piece - it spans 3 files!
 		1: {
 			{
 				Filename: "file1",
-				Offset:   uint64(10),
+				Offset:   uint32(10),
 				Length:   2,
 			},
 			{
 				Filename: "file2",
-				Offset:   uint64(0),
+				Offset:   uint32(0),
 				Length:   4,
 			},
 			{
 				Filename: "file3",
-				Offset:   uint64(0),
+				Offset:   uint32(0),
 				Length:   4,
 			}},
 		2: {
 			{
 				Filename: "file3",
-				Offset:   uint64(4),
+				Offset:   uint32(4),
 				Length:   3,
 			}},
 	}
 
 	for pieceIdx, expectedSegments := range expected {
-		segments := torrent.GetSegmentsForPiece(binfo, uint64(pieceIdx))
+		segments := torrent.GetSegmentsForPiece(binfo, uint32(pieceIdx))
 		if !reflect.DeepEqual(segments, expectedSegments) {
 			t.Errorf("expected %+v, got %+v ", expectedSegments, segments)
 		}
@@ -90,17 +90,17 @@ func TestWriteSegments(t *testing.T) {
 		{
 			Filename: "file1",
 			// we start writing from the 3rd byte onwards
-			Offset: uint64(2),
+			Offset: uint32(2),
 			Length: 2,
 		},
 		{
 			Filename: "file2",
-			Offset:   uint64(0),
+			Offset:   uint32(0),
 			Length:   4,
 		},
 		{
 			Filename: "file3",
-			Offset:   uint64(0),
+			Offset:   uint32(0),
 			Length:   4,
 		},
 	}

@@ -21,3 +21,22 @@ func TestGetHandshake(t *testing.T) {
 		t.Errorf("%v", hexBytes)
 	}
 }
+
+func TestGetPiecesScore(t *testing.T) {
+	availability := map[uint32]uint32{
+		0: 2,
+		3: 1,
+		5: 4,
+		7: 3,
+	}
+	numPeers := 4
+
+	// this peer only has the same pieces as those we already have
+	bitfield := data.BitField{
+		Field: []byte{1},
+	}
+	score := GetPiecesScore(bitfield, availability, numPeers)
+	if score != 0 {
+		t.Errorf("expected a score of 0, got %d", score)
+	}
+}

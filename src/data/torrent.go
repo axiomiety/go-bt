@@ -9,9 +9,9 @@ type BETorrent struct {
 
 type BEInfo struct {
 	Name        string   `bencode:"name"`
-	PieceLength uint64   `bencode:"piece length"` // bytes per piece
+	PieceLength uint32   `bencode:"piece length"` // bytes per piece
 	Pieces      string   `bencode:"pieces"`       // byte string, 20-byte SHA1 for each piece
-	Length      uint64   `bencode:"length"`       // of file(s), in bytes
+	Length      uint32   `bencode:"length"`       // of file(s), in bytes
 	Files       []BEFile `bencode:"files"`
 }
 
@@ -20,7 +20,7 @@ type BEFile struct {
 	Length int      `bencode:"length"`
 }
 
-func (i *BEInfo) GetPieceSize(idx uint64) uint64 {
+func (i *BEInfo) GetPieceSize(idx uint32) uint32 {
 	numPieces := i.GetNumPieces()
 	if idx == numPieces-1 {
 		return min(i.PieceLength, i.GetTotalLength()%i.PieceLength)
@@ -29,17 +29,17 @@ func (i *BEInfo) GetPieceSize(idx uint64) uint64 {
 	}
 }
 
-func (i *BEInfo) GetTotalLength() uint64 {
+func (i *BEInfo) GetTotalLength() uint32 {
 	totalLength := i.Length
 	if len(i.Files) > 0 {
 		for _, file := range i.Files {
-			totalLength += uint64(file.Length)
+			totalLength += uint32(file.Length)
 		}
 	}
 	return totalLength
 }
 
-func (i *BEInfo) GetNumPieces() uint64 {
+func (i *BEInfo) GetNumPieces() uint32 {
 	totalLength := i.GetTotalLength()
 	numPieces := totalLength / i.PieceLength
 	if totalLength%i.PieceLength > 0 {

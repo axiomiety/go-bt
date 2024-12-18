@@ -23,26 +23,26 @@ func CalculateInfoHashFromInfoDict(info map[string]any) [20]byte {
 
 type Segment struct {
 	Filename string
-	Offset   uint64
-	Length   uint64
+	Offset   uint32
+	Length   uint32
 }
 
-func GetSegmentsForPiece(i *data.BEInfo, index uint64) []Segment {
+func GetSegmentsForPiece(i *data.BEInfo, index uint32) []Segment {
 	segments := make([]Segment, 0)
 
 	pieceStart := index * i.PieceLength
 	bytesRemainingInPiece := i.PieceLength
-	runningOffset := uint64(0)
+	runningOffset := uint32(0)
 	for _, file := range i.Files {
 		if bytesRemainingInPiece == 0 || runningOffset > pieceStart+bytesRemainingInPiece {
 			// we're done
 			break
-		} else if (runningOffset + uint64(file.Length)) < pieceStart {
+		} else if (runningOffset + uint32(file.Length)) < pieceStart {
 			// this is beyond the current file's boundary
-			runningOffset += uint64(file.Length)
+			runningOffset += uint32(file.Length)
 		} else {
 			// part of this piece belongs to this file
-			fileBytesInPiece := min(runningOffset+uint64(file.Length)-pieceStart, bytesRemainingInPiece)
+			fileBytesInPiece := min(runningOffset+uint32(file.Length)-pieceStart, bytesRemainingInPiece)
 			segments = append(segments, Segment{
 				Filename: file.Path[0],
 				Offset:   pieceStart - runningOffset,
@@ -52,8 +52,8 @@ func GetSegmentsForPiece(i *data.BEInfo, index uint64) []Segment {
 			bytesRemainingInPiece -= fileBytesInPiece
 			pieceStart += fileBytesInPiece
 			// if we're at a file boundary we should move on to the next one
-			if pieceStart == (runningOffset + uint64(file.Length)) {
-				runningOffset += uint64(file.Length)
+			if pieceStart == (runningOffset + uint32(file.Length)) {
+				runningOffset += uint32(file.Length)
 			}
 		}
 	}
