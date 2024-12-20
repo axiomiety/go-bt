@@ -29,6 +29,7 @@ type PeerManager struct {
 	PeerId          [20]byte
 	TrackerURL      url.URL
 	BitField        data.BitField
+	PeerPoolSize    int
 }
 
 func (p *PeerManager) QueryTracker() {
@@ -51,9 +52,23 @@ func (p *PeerManager) UpdatePeers() {
 	// the blocks we require, we could disconnect and find new ones
 	// we can also discard peers we've had trouble connecting to in the past,
 	// or ones that are chocked
-	if len(p.PeerHandlers) < 5 {
-		p.PeerHandlerLock.Lock()
-		defer p.PeerHandlerLock.Unlock()
+
+	// start by ejecting peers
+
+	p.PeerHandlerLock.Lock()
+	defer p.PeerHandlerLock.Unlock()
+	peersToRemove := []string{}
+	for peerId, peer := range p.PeerHandlers {
+		if peer.State == ERROR {
+			peersToRemove = append(peersToRemove, peerId)
+		}
+	}
+	for _, peerId := range peersToRemove {
+		log.Printf("dropping peer %s because it is in an ERROR state", hex.EncodeToString([]byte(peerId)))
+		delete(p.PeerHandlers, peerId)
+	}
+
+	if len(p.PeerHandlers) < p.PeerPoolSize {
 		for _, peer := range p.TrackerResponse.Peers {
 			// do we know the peer?
 			if _, ok := p.PeerHandlers[peer.Id]; ok {
@@ -61,8 +76,7 @@ func (p *PeerManager) UpdatePeers() {
 				continue
 			}
 			// let's not try to connect to ourselves
-			// TODO: fix that hack
-			if peer.Id != string(p.PeerId[:]) && peer.Port != 6688 {
+			if peer.Id != string(p.PeerId[:]) {
 				log.Printf("enquing peer %s - %s", hex.EncodeToString([]byte(peer.Id)), net.JoinHostPort(peer.IP, fmt.Sprintf("%d", peer.Port)))
 				// we're using a range - peer gets reassigned
 				// at every iteration! c.f. the below for a more in-depth explanation
@@ -101,6 +115,8 @@ func FromTorrentFile(filename string) *PeerManager {
 		PeerHandlerLock: &mu,
 		PeerId:          [20]byte(peerId),
 		TrackerURL:      *baseUrl,
+		// hard-coded for now
+		PeerPoolSize: 5,
 	}
 }
 
@@ -115,22 +131,12 @@ func (p *PeerManager) queryTrackerAndUpdatePeersList(ctx context.Context) {
 }
 
 func (p *PeerManager) refreshPeerPool(ctx context.Context) {
-	peersToRemove := []string{}
-	for peerId, peer := range p.PeerHandlers {
+	for _, peer := range p.PeerHandlers {
 		switch peer.State {
 		case UNSET:
 			// likely a new peer - let's connect!
 			go peer.Loop(ctx)
-		case ERROR:
-			peersToRemove = append(peersToRemove, peerId)
 		}
-	}
-
-	p.PeerHandlerLock.Lock()
-	defer p.PeerHandlerLock.Unlock()
-	for _, peerId := range peersToRemove {
-		log.Printf("dropping peer %s because it is in an ERROR state", hex.EncodeToString([]byte(peerId)))
-		delete(p.PeerHandlers, peerId)
 	}
 }
 
@@ -188,24 +194,23 @@ func GetPiecesScore(b data.BitField, availability map[uint32]uint32, numPeers ui
 	return score
 }
 
-func (p *PeerManager) GetPeerScore(availability map[uint32]uint32, h *PeerHandler) int {
+func (p *PeerManager) GetPeerScore(availability map[uint32]uint32, h *PeerHandler) uint32 {
 	// not yet unchocked!
 	if p.PeerHasPieceOfInterest(h) {
-		score := GetPiecesScore(h.BitField, availability, len(p.PeerHandlers))
+		score := GetPiecesScore(h.BitField, availability, uint32(len(p.PeerHandlers)))
 		if h.State == READY {
 			// we're chocked - halve the score
 			return score / 2
 		} else {
 			return score
 		}
-	} else if h.State == READY {
-		// the peer has choked us and it doesn't have
-		// any piece of interest
-		return 0
-	} else {
+	} else if h.State == UNCHOKED {
 		// peer is unchocked but it doesn't currently have
 		// any piece we're interested in
 		return 1
+	} else {
+		// no interest here!
+		return 0
 	}
 }
 
@@ -231,7 +236,7 @@ func (p *PeerManager) Run() {
 	// periodic ping to the tracker to ensure we still show up
 	// as a valid peer
 	// TODO: this should ideally have the right event sent out
-	// to the tracker
+	// to the tracker depending on which state we're in
 	go func(ctx context.Context) {
 		p.queryTrackerAndUpdatePeersList(ctx)
 		time.Sleep(30 * time.Second)
@@ -243,14 +248,17 @@ func (p *PeerManager) Run() {
 			return
 		default:
 			p.refreshPeerPool(ctx)
-			for _, peer := range p.PeerHandlers {
-				if peer.State == UNSET {
-					// eventually this will need to go into a goroutine
-					go kickOff(peer, ctx)
-					time.Sleep(30 * time.Second)
+
+			/*
+				for _, peer := range p.PeerHandlers {
+					if peer.State == UNSET {
+						// eventually this will need to go into a goroutine
+						go kickOff(peer, ctx)
+						time.Sleep(30 * time.Second)
+					}
+					break
 				}
-				break
-			}
+			*/
 		}
 		time.Sleep(5 * time.Second)
 	}

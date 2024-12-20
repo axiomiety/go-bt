@@ -29,14 +29,23 @@ func TestGetPiecesScore(t *testing.T) {
 		5: 4,
 		7: 3,
 	}
-	numPeers := 4
+	numPeers := uint32(4)
 
 	// this peer only has the same pieces as those we already have
 	bitfield := data.BitField{
-		Field: []byte{1},
+		Field: []byte{0b00000001},
 	}
 	score := GetPiecesScore(bitfield, availability, numPeers)
-	if score != 0 {
-		t.Errorf("expected a score of 0, got %d", score)
+	if score != 2 {
+		t.Errorf("expected a score of 2, got %d", score)
+	}
+
+	// this one has a unique piece!
+	bitfield = data.BitField{
+		Field: []byte{0b00010000},
+	}
+	score = GetPiecesScore(bitfield, availability, numPeers)
+	if score != 4 {
+		t.Errorf("expected a score of 4, got %d", score)
 	}
 }
