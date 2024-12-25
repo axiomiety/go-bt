@@ -67,7 +67,7 @@ func main() {
 		manager := peer.FromTorrentFile(*downloadTorrentFile)
 		obj := bencode.GetDictFromFile(downloadTorrentFile)
 		infoDict := obj["info"].(map[string]any)
-		log.Printf("hash of idx 183: %s", hex.EncodeToString([]byte(infoDict["pieces"].(string)[20*183:])))
+		log.Printf("hash of idx 0: %s", hex.EncodeToString([]byte(infoDict["pieces"].(string)[0:20*1])))
 		manager.Run()
 		log.Printf("manager has shut down")
 	case "handshake":
@@ -84,7 +84,7 @@ func main() {
 			Port: uint32(*handshakePeerPort),
 			Id:   string(peerId),
 		}
-		ph := peer.MakePeerHandler(&bepeer, [20]byte(peerIdB), digest, infoDict["piece length"].(uint64))
+		ph := peer.MakePeerHandler(&bepeer, [20]byte(peerIdB), digest, infoDict["piece"].(uint32))
 		ph.Connect()
 		ph.Handshake()
 		log.Printf("peer state: %d", ph.State)

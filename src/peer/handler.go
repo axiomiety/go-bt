@@ -64,7 +64,7 @@ func MakePeerHandler(peer *data.BEPeer, peerId [20]byte, infoHash [20]byte, bloc
 		Incoming:   make(chan *data.Message),
 		Outgoing:   make(chan *data.Message),
 		BitField: data.BitField{
-			Field: make([]byte, blockSize/8),
+			Field: make([]byte, blockSize/20),
 		},
 	}
 }
@@ -252,6 +252,7 @@ func (p *PeerHandler) receiveBlock(payload []byte) {
 		h := sha1.New()
 		h.Write(p.PendingPiece.Data)
 		log.Printf("hash: %s", hex.EncodeToString(h.Sum(nil)))
+		p.State = PIECE_COMPLETE
 	} else if p.PendingPiece.NextOffset < p.PendingPiece.TotalSize {
 		// we need to request another piece
 		// at most we'll get 16KB
@@ -260,14 +261,16 @@ func (p *PeerHandler) receiveBlock(payload []byte) {
 		p.Outgoing <- msg
 	} else {
 		log.Printf("downloaded more than we should have! next:%d vs total:%d resetting...", p.PendingPiece.NextOffset, p.PendingPiece.TotalSize)
-		// clean up the pending block
-		// request it again ?
+		p.State = READY
 	}
 }
 
 func (p *PeerHandler) processIncoming(msg *data.Message) {
 
 	switch msg.MessageId {
+	case data.MsgChoke:
+		log.Print("we're choked!")
+		p.State = READY
 	case data.MsgBitfield:
 		p.BitField = data.BitField{
 			Field: msg.Payload,

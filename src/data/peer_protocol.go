@@ -82,7 +82,7 @@ type BitField struct {
 
 func (b *BitField) NumPieces() uint32 {
 	// each byte represents 8 blocks
-	return uint32(cap(b.Field) * 8)
+	return uint32(cap(b.Field))
 }
 
 func (b *BitField) HasPiece(idx uint32) bool {
